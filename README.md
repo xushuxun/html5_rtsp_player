@@ -4,6 +4,8 @@ html5_rtsp_player.js is a Javascript library which implements RTSP client for wa
 that works directly on top of a standard HTML <video> element. 
 It requires support of HTML5 Video with Media Sources Extensions for playback. Also player relies on server-side websocket 
 proxy for retransmitting RTSP streams to browser.
+
+![](http://www.specforge.com/images/html5_rtsp_player/html5_player.png)
    
 It works by muxing RTP h.264 payload into ISO BMFF (MP4) fragments. 
 
