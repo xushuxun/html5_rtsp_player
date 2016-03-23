@@ -6,7 +6,7 @@ It requires support of HTML5 Video with Media Sources Extensions for playback. A
 proxy for retransmitting RTSP streams to browser.
 
 ![](http://www.specforge.com/images/html5_rtsp_player/html5_player.png)
-   
+      
 It works by muxing RTP h.264 payload into ISO BMFF (MP4) fragments. 
 
 html5_rtsp_player.js is written in ECMAScript6, and transpiled in ECMAScript5 using Babel.
@@ -86,22 +86,24 @@ Include compiled script into your HTML:
 
 1. Install websocket proxy
 
-    _repo files will be included later_
+    For Debian-based systems:
         
     ```
-    apt install wsock_rtsp_proxy # Debian-based systems
+    curl -o- http://repo.tom.ru/rpm/websockrtsprepo-1-0.deb | dpkg --install 
+    apt install websockrtspproxy # Debian-based systems
     ```
 
-    or 
+    or Fedora:
     
     ```
-    dnf install wsock_rtsp_proxy # Fedora
+    dnf install http://repo.tom.ru/rpm/websock_rtsp_repo-1-0.noarch.rpm
+    dnf install websock_rtsp_proxy
     ```
 
-2. Configure port in /etc/wsock_rtsp_proxy
+2. Configure port in /etc/ws_rtsp.ini
 
 3. Run it
 
 ```
-> service wsock_rtsp_proxy start
+> service ws_rtsp start
 ```

@@ -204,9 +204,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-	src/iso-bmff/remux/mp4-generator.js, src/iso-bmff/remux/mp4-remuxer.js and
-	src/iso-bmff/remux/dummy-remuxer.js implementation in this project
-	are derived from the hls.js library (https://github.com/dailymotion/hls.js)
+src/iso-bmff/mp4-generator.js src/h264/exp-golomb.js implementation in this project
+are derived from the hls.js library (https://github.com/dailymotion/hls.js)
 
 	That work is also covered by the Apache 2 License, following copyright:
 	Copyright (c) 2013-2015 Brightcove

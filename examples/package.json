@@ -1,6 +1,8 @@
 {
   "name": "html5_rtsp_player.js.example",
   "version": "0.0.1",
+  "private":
+  true,
   "devDependencies": {
     "babel-core": "^6.5.2",
     "babel-loader": "^6.2.3",
