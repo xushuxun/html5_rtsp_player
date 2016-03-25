@@ -15,7 +15,7 @@ export class RTSPWebsocketBackend {
         this.ready = this.connect();
     }
 
-    setEndpoint(host, port, auth) {
+    setEndpoint({host, port, auth}) {
         this.host = host;
         this.port = port;
         this.auth = auth;

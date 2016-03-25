@@ -22,7 +22,7 @@
     "webpack": "^1.12.14"
   },
   "dependencies": {
-    "html5_rtsp": "*",
+    "html5_rtsp_player": "*",
     "bp_event": "^1.0.1",
     "bp_logger": "^1.0.3",
     "bp_statemachine": "^1.0.0"

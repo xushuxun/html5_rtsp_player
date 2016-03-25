@@ -11,6 +11,22 @@ It works by muxing RTP h.264 payload into ISO BMFF (MP4) fragments.
 
 html5_rtsp_player.js is written in ECMAScript6, and transpiled in ECMAScript5 using Babel.
 
+## Live test stream
+
+Link to server running with websock_rtsp_proxy and test page http://srv.tom.ru
+
+Browser support: 
+
+* Firefox v.42+
+* Chrome v.23+
+* OSX Safari v.8+
+* MS Edge v.13+
+* Opera v.15+
+* Android browser v.5.0+
+* IE Mobile v.11+
+
+Not supported in iOS Safari and Internet Explorer
+
 ## Install
 
 npm install git://github.com/SpecForge/html5_rtsp_player.git
@@ -29,7 +45,7 @@ Setup player in your js:
 ```
 import * as rtsp from 'rtsp_player';
 
-rtsp.RTSP_CONFIG['websocket.url'] = "ws://websocket_proxy_address/ws";
+rtsp.RTSP_CONFIG['websocket.url'] = "ws://websocket_proxy_address/ws"; // You should specify address of proxy described below
 
 let player = rtsp.attach(document.getElementById('test_video'));
 ```
@@ -101,6 +117,8 @@ Include compiled script into your HTML:
     ```
 
 2. Configure port in /etc/ws_rtsp.ini
+
+    This port should be open in your firewall. Also you can pass request to this port from your proxy. (for example: http://nginx.org/en/docs/http/websocket.html) 
 
 3. Run it
 

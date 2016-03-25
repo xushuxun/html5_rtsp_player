@@ -27,7 +27,7 @@ module.exports = {
     },
     resolve: {
         alias: {
-            rtsp: path.join(__dirname,'node_modules/html5_rtsp/src')
+            rtsp: path.join(__dirname,'node_modules/html5_rtsp_player/src')
         }
     }
 };

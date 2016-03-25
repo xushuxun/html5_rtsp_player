@@ -21,7 +21,7 @@ export class WebSocketProxy {
     }
 
     initConnection() {
-        this._send(`INIT 1.0 SERVER\r\nhost ${this.data.host}\r\nport ${this.data.port}\r\n\r\n`);
+        this._send(`WSP 1.0 INIT\r\nhost ${this.data.host}\r\nport ${this.data.port}\r\n\r\n`);
     }
 
     connect(protocol) {
@@ -34,7 +34,7 @@ export class WebSocketProxy {
                 if (protocol=="rtsp") {
                     this.initConnection();
                 } else if (protocol == "rtp") {
-                    this._send(`INIT ${this.data.sock_id}`);
+                    this._send(`WSP 1.0 INIT\r\nRTSP ${this.data.sock_id}`);
                 }
             };
             this.sock.onmessage = (ev)=>{
