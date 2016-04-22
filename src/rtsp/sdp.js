@@ -8,6 +8,7 @@ export class SDPParser {
         this.timing = null;
         this.sessionBlock = {};
         this.media = {};
+        this.tracks = {};
     }
 
     parse(content) {
@@ -17,6 +18,8 @@ export class SDPParser {
             var dataString = content;
             var success = true;
             var currentMediaBlock = this.sessionBlock;
+
+            // TODO: multiple audio/video tracks
 
             for (let line of dataString.split("\n")) {
                 line = line.replace(/\r/, '');
@@ -233,6 +236,10 @@ export class SDPParser {
 
     getSessionBlock() {
         return this.sessionBlock;
+    }
+
+    hasMedia(mediaType) {
+        return this.media[mediaType] != undefined;
     }
 
     getMediaBlock(mediaType) {

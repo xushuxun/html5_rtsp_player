@@ -3,10 +3,13 @@ import {Log} from 'bp_logger';
 import {MSE} from './../video_presenters/mse';
 import {SDPParser} from './sdp';
 import {RTSPStream} from './stream';
-import {CustomEventListener} from 'bp_event';
+import {Remuxer} from '../remuxer/remuxer';
+import {RTP} from './rtp';
+import {RTPError} from './connection';
+
 
 export class RTSPClientSM extends StateMachine {
-    static USER_AGENT = 'SFRtsp 0.1';
+    static USER_AGENT = 'SFRtsp 0.2';
     static STATE_INITIAL  = 1 << 0;
     static STATE_OPTIONS  = 1 << 1;
     static STATE_DESCRIBE = 1 << 2;
@@ -19,6 +22,7 @@ export class RTSPClientSM extends StateMachine {
 
         this.connection = connection;
         this.mse = new MSE([_mediaElement]);
+        this.remuxer = null;
 
         this.reset();
 
@@ -60,14 +64,12 @@ export class RTSPClientSM extends StateMachine {
         this.transitionTo(RTSPClientSM.STATE_INITIAL);
 
         this.shouldReconnect = false;
-        this.eventListener = new CustomEventListener();
-        this.eventListener.observe(this.connection.eventSource);
-        this.eventListener.on('connected', ()=>{
+        this.connection.eventSource.addEventListener('connected', ()=>{
             if (this.shouldReconnect) {
                 this.reconnect();
             }
         });
-        this.eventListener.on('disconnected', ()=>{
+        this.connection.eventSource.addEventListener('disconnected', ()=>{
             if (this.started) {
                 this.shouldReconnect = true;
             }
@@ -89,6 +91,10 @@ export class RTSPClientSM extends StateMachine {
         this.sdp = null;
         this.interleaveChannelIndex = 0;
         this.session = null;
+        this.vtrack_idx = -1;
+        this.atrack_idx = -1;
+        this.stopStreamFlush();
+
         this.mse.reset();
     }
 
@@ -148,17 +154,51 @@ export class RTSPClientSM extends StateMachine {
 
     sendSetup() {
         let streams=[];
-        for (let track of this.tracks) {
-            Log.log("setup track: "+track);
-            this.streams[track] = new RTSPStream(this, this.sdp.getMediaBlock(track));
-            streams.push(this.streams[track].start());
-            // TODO: mix tracks?
-            this.streams[track].attachMSE(this.mse);
+        this.remuxer = new Remuxer();
+        this.remuxer.attachMSE(this.mse);
+
+        // TODO: select first video and first audio tracks
+        for (let track_type of this.tracks) {
+            Log.log("setup track: "+track_type);
+            // if (track_type=='audio') continue;
+            // if (track_type=='video') continue;
+            let track = this.sdp.getMediaBlock(track_type);
+            this.streams[track_type] = new RTSPStream(this, track);
+            this.remuxer.setTrack(track, this.streams[track_type]);
+            let playPromise = this.streams[track_type].start();
+            playPromise.then(({track, data})=>{
+                let timeOffset = 0;
+                try {
+                    let rtp_info = data.headers["rtp-info"].split(';');
+                    timeOffset = Number(rtp_info[rtp_info.length - 1].split("=")[1]) ;
+                } catch (e) {
+                    timeOffset = new Date().getTime();
+                }
+                this.remuxer.setTimeOffset(timeOffset, track);
+            });
+            streams.push(playPromise);
         }
+        this.startStreamFlush();
+        this.connection.backend.setRtpHandler(this.onRTP.bind(this));
         return Promise.all(streams);
     }
 
     onSetup() {
         this.transitionTo(RTSPClientSM.STATE_STREAMS);
+    }
+
+    startStreamFlush() {
+        this.flushInterval = setInterval(()=>{
+            if (this.remuxer) this.remuxer.flush();
+        }, 200); // TODO: configurable
+    }
+
+    stopStreamFlush() {
+        clearInterval(this.flushInterval);
+    }
+
+    onRTP(_data) {
+        // console.log(rtpPacket.media.type);
+        this.remuxer.feedRTP(new RTP(_data.packet, this.sdp));
     }
 }

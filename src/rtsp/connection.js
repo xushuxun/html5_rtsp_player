@@ -2,7 +2,7 @@ import {RTSP_CONFIG, MessageBuilder} from './../config';
 import {Log} from 'bp_logger';
 import {WebSocketProxy} from './../util/websocket_proxy';
 import {RTSPClientSM as RTSPClient} from './client';
-import {EventSource} from 'bp_event';
+import {EventEmitter} from 'bp_event';
 
 export class RTSPWebsocketBackend {
     constructor(host, port, auth) {
@@ -10,9 +10,10 @@ export class RTSPWebsocketBackend {
         this.response_queue=[];
 
         this.setEndpoint({host, port, auth});
-        this.eventSource = new EventSource();
+        this.eventSource = new EventEmitter();
 
         this.ready = this.connect();
+        this.rtp_channels = new Set();
     }
 
     setEndpoint({host, port, auth}) {
@@ -49,7 +50,10 @@ export class RTSPWebsocketBackend {
             }
             this.rtpproxy = new WebSocketProxy(RTSP_CONFIG['websocket.url'], {sock_id: id});
             this.rtpproxy.set_message_handler((ev)=>{
-                this.rtp_handler({packet:ev.data, type:0});
+                let channel = new DataView(ev.data).getUint8(1);
+                if (this.rtp_channels.has(channel)) {
+                    this.rtp_handler({packet: new Uint8Array(ev.data, 4), type: channel});
+                }
             });
             this.rtpproxy.set_disconnect_handler(()=>{
                 if (this.proxy) {
@@ -83,6 +87,14 @@ export class RTSPWebsocketBackend {
 
     setRtpHandler(handler){
         this.rtp_handler = handler;
+    }
+
+    useRTPChannel(channel) {
+        this.rtp_channels.add(channel);
+    }
+
+    forgetRTPChannel(channel) {
+        this.rtp_channels.delete(channel);
     }
 }
 

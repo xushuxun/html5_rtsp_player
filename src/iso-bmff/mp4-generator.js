@@ -219,7 +219,7 @@ export class MP4 {
     /**
      * @param tracks... (optional) {array} the tracks associated with this movie
      */
-    static moov(tracks) {
+    static moov(tracks, duration, timescale) {
         var
             i = tracks.length,
             boxes = [];
@@ -228,7 +228,7 @@ export class MP4 {
             boxes[i] = MP4.trak(tracks[i]);
         }
 
-        return MP4.box.apply(null, [MP4.types.moov, MP4.mvhd(tracks[0].timescale, tracks[0].duration)].concat(boxes).concat(MP4.mvex(tracks)));
+        return MP4.box.apply(null, [MP4.types.moov, MP4.mvhd(timescale, duration)].concat(boxes).concat(MP4.mvex(tracks)));
     }
 
     static mvex(tracks) {
@@ -407,7 +407,8 @@ export class MP4 {
                 0x00, 0x00, 0x00, 0x00, // reserved
                 0x00, track.channelCount, // channelcount
                 0x00, 0x10, // sampleSize:16bits
-                0x00, 0x00, 0x00, 0x00, // reserved2
+                0x00, 0x00, // pre_defined
+                0x00, 0x00, // reserved2
                 (audiosamplerate >> 8) & 0xFF,
                 audiosamplerate & 0xff, //
                 0x00, 0x00]),
@@ -426,7 +427,8 @@ export class MP4 {
         var id = track.id,
             duration = track.duration,
             width = track.width,
-            height = track.height;
+            height = track.height,
+            volume = track.volume;
         return MP4.box(MP4.types.tkhd, new Uint8Array([
             0x00, // version 0
             0x00, 0x00, 0x07, // flags
@@ -445,7 +447,7 @@ export class MP4 {
             0x00, 0x00, 0x00, 0x00, // reserved
             0x00, 0x00, // layer
             0x00, 0x00, // alternate_group
-            0x00, 0x00, // non-audio track volume
+            (volume>>0)&0xff, (((volume%1)*10)>>0)&0xff, // track volume // FIXME
             0x00, 0x00, // reserved
             0x00, 0x01, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00,
@@ -572,11 +574,11 @@ export class MP4 {
         return MP4.box(MP4.types.trun, array);
     }
 
-    static initSegment(tracks) {
+    static initSegment(tracks, duration, timescale) {
         if (!MP4.types) {
             MP4.init();
         }
-        var movie = MP4.moov(tracks), result;
+        var movie = MP4.moov(tracks, duration, timescale), result;
         result = new Uint8Array(MP4.FTYP.byteLength + movie.byteLength);
         result.set(MP4.FTYP);
         result.set(movie, MP4.FTYP.byteLength);

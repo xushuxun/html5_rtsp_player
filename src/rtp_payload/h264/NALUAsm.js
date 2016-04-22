@@ -1,6 +1,6 @@
 import {NALU} from './NALU';
 import {Log} from 'bp_logger';
-
+// TODO: asm.js
 export class NALUAsm {
     static NALTYPE_FU_A = 28;
     static NALTYPE_FU_B = 29;
@@ -14,17 +14,17 @@ export class NALUAsm {
         if (!pkt.media) {
             return null;
         }
-        let data = new DataView(rawData.buffer);
+        let data = new DataView(rawData.buffer, rawData.byteOffset);
 
         let nalhdr = data.getUint8(0);
 
-        var nri = nalhdr & 0x60;
-        var naltype = nalhdr & 0x1F;
+        let nri = nalhdr & 0x60;
+        let naltype = nalhdr & 0x1F;
         let nal_start_idx = 1;
 
         if (27 >= naltype && 0 < naltype) {
             /* This RTP package is a single NALU, dispatch and forget, 0 is undefined */
-            return new NALU(naltype, nri, rawData.slice(nal_start_idx), pkt.getTimestampMS());
+            return new NALU(naltype, nri, rawData.subarray(nal_start_idx), pkt.getTimestampMS());
             //return;
         }
 
@@ -47,10 +47,10 @@ export class NALUAsm {
 
         if (null === this.nalu) {
             /* Create a new NAL unit from multiple fragmented NAL units */
-            this.nalu = new NALU(nftype, nri, rawData.slice(nal_start_idx), pkt.getTimestampMS());
+            this.nalu = new NALU(nftype, nri, rawData.subarray(nal_start_idx), pkt.getTimestampMS());
         } else {
             /* We've already created the NAL unit, append current data */
-            this.nalu.appendData(rawData.slice(nal_start_idx));
+            this.nalu.appendData(rawData.subarray(nal_start_idx));
         }
 
         if (1 === nfend) {

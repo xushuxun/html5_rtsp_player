@@ -1,7 +1,7 @@
 /**
  * Parser for exponential Golomb codes, a variable-bitwidth number encoding scheme used by h264.
 */
-
+// TODO: asm.js
 import {Log as logger} from 'bp_logger';
 
 export class ExpGolomb {
@@ -26,7 +26,7 @@ export class ExpGolomb {
       throw new Error('no bytes available');
     }
     workingBytes.set(this.data.subarray(position, position + availableBytes));
-    this.word = new DataView(workingBytes.buffer).getUint32(0);
+    this.word = new DataView(workingBytes.buffer, workingBytes.byteOffset).getUint32(0);
     // track the amount of this.data that has been processed
     this.bitsAvailable = availableBytes * 8;
     this.bytesAvailable -= availableBytes;

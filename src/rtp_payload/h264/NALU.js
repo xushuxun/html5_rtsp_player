@@ -1,4 +1,4 @@
-import {appendByteArray} from '../util/bytearray';
+import {appendByteArray} from '../../util/binary';
 
 export class NALU {
 

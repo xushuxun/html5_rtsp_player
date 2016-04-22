@@ -7,7 +7,7 @@ proxy for retransmitting RTSP streams to browser.
 
 ![](http://www.specforge.com/images/html5_rtsp_player/html5_player.png)
       
-It works by muxing RTP h.264 payload into ISO BMFF (MP4) fragments. 
+It works by muxing RTP h.264 and MP4A-LATM payload into ISO BMFF (MP4) fragments. 
 
 html5_rtsp_player.js is written in ECMAScript6, and transpiled in ECMAScript5 using Babel.
 

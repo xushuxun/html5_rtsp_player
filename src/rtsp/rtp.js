@@ -1,7 +1,8 @@
+// TODO: asm.js
 import {Log} from 'bp_logger';
 export class RTP {
-    constructor(pkt/*arraybuffer*/, sdp) {
-        let bytes = new DataView(pkt);
+    constructor(pkt/*uint8array*/, sdp) {
+        let bytes = new DataView(pkt.buffer, pkt.byteOffset);
 
         this.version   = bytes.getUint8(0) >>> 6;
         this.padding   = bytes.getUint8(0) & 0x20 >>> 5;
@@ -40,9 +41,7 @@ export class RTP {
             Log.log('Media description for payload type: ' + this.pt + ' not provided.');
         }
 
-        this.data = new Uint8Array(pkt.slice(pktIndex/*, this.headerLength+this.bodyLength*/));
-        //this.eventType = `${this.media.type.toUpperCase()}_${this.media.rtpmap[this.pt].name.toUpperCase()}_PACKET`;
-        //Log.debug(this.sequence);
+        this.data = pkt.subarray(pktIndex);
     }
     getPayload() {
         return this.data;
@@ -64,4 +63,7 @@ export class RTP {
             "timestamp:" + this.timestamp + ", " +
             "ssrc:"      + this.ssrc      + ")";
     }
+
+    isVideo(){return this.media.type == 'video';}
+    isAudio(){return this.media.type == 'audio';}
 }
