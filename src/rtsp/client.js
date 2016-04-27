@@ -156,6 +156,11 @@ export class RTSPClientSM extends StateMachine {
         let streams=[];
         this.remuxer = new Remuxer();
         this.remuxer.attachMSE(this.mse);
+        this.remuxer.eventSource.addEventListener('stop', this.stopStreamFlush.bind(this));
+        this.remuxer.eventSource.addEventListener('error', (e)=>{
+            alert(e.detail.reason);
+            this.stopStreamFlush();
+        });
 
         // TODO: select first video and first audio tracks
         for (let track_type of this.tracks) {

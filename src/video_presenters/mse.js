@@ -49,7 +49,7 @@ export class MSE {
             });
             this.mediaSource.addEventListener('sourceclose', ()=>{
                 Log.debug(`Media source closed: ${this.mediaSource.readyState}`);
-                this.eventSource.trigger('sourceclose');
+                this.eventSource.dispatchEvent('sourceclose');
             });
         });
         this.clear();
@@ -57,7 +57,6 @@ export class MSE {
 
     clear() {
         this.queue = [];
-        this.flush_ranges = [];
     }
 
     setCodec(mimeCodec) {
@@ -73,7 +72,6 @@ export class MSE {
 
             this.sourceBuffer.addEventListener('updateend', (e)=> {
                 this.updating = false;
-                // Log.debug('update end');
                 this.feedNext();
             });
 
@@ -82,7 +80,7 @@ export class MSE {
                 if (this.mediaSource.sourceBuffers.length) {
                     this.mediaSource.removeSourceBuffer(this.sourceBuffer);
                 }
-                this.eventSource.trigger('error');
+                this.eventSource.dispatchEvent('error');
             });
 
             this.sourceBuffer.addEventListener('abort', (e)=> {
@@ -90,7 +88,7 @@ export class MSE {
                 if (this.mediaSource.sourceBuffers.length) {
                     this.mediaSource.removeSourceBuffer(this.sourceBuffer);
                 }
-                this.eventSource.trigger('error');
+                this.eventSource.dispatchEvent('error');
             });
 
             if (!this.sourceBuffer.updating) {
@@ -101,17 +99,32 @@ export class MSE {
 
     feedNext() {
         if (!this.updating) {
-            if (this.flush_ranges.length > 10) {
-                let flush = this.flush_ranges.shift();
-                this.sourceBuffer.remove(flush.start, flush.end);
-            } else if (this.queue.length) {
-                this.doAppend(this.queue.shift());
+            let canAppend=true;
+            if (this.sourceBuffer.buffered.length) {
+                canAppend = this.players[0].currentTime - 1-this.sourceBuffer.buffered.start(0)<3;
+            }
+            if (canAppend) {
+                if (this.queue.length) {
+                    this.doAppend(this.queue.shift());
+                }
+            } else {
+                this.doCleanup();
             }
         }
     }
 
-    addFlushRange(range) {
-        this.flush_ranges.push(range);
+    doCleanup() {
+        if (this.sourceBuffer.buffered.length) {
+            let bufferStart = this.sourceBuffer.buffered.start(0);
+            let removeEnd = this.players[0].currentTime - 1;
+
+            if (removeEnd > bufferStart) {
+                this.updating = true;
+                this.sourceBuffer.remove(bufferStart, removeEnd);
+            }
+        } else {
+            this.feedNext();
+        }
     }
 
     doAppend(data) {
@@ -125,15 +138,23 @@ export class MSE {
             } catch (e){
 
             }
-            this.eventSource.trigger('error');
+            this.eventSource.dispatchEvent('error');
         } else {
             try {
                 // Log.debug('feed');
+                this.updating = true;
                 this.sourceBuffer.appendBuffer(data);
             } catch (e) {
+                if (e.name === 'QuotaExceededError') {
+                    this.queue.unshift(data);
+
+                    this.doCleanup();
+                    return;
+                }
+
                 // reconnect on fail
                 Log.error(`Error occured while appending buffer. ${e.name}: ${e.message}`);
-                this.eventSource.trigger('error');
+                this.eventSource.dispatchEvent('error');
             }
         }
 

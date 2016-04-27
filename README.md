@@ -13,7 +13,7 @@ html5_rtsp_player.js is written in ECMAScript6, and transpiled in ECMAScript5 us
 
 ## Live test stream
 
-Link to server running with websock_rtsp_proxy and test page http://srv.tom.ru
+Link to server running with websock_rtsp_proxy and test page http://specforge.com/html5playerstream/index.html
 
 Browser support: 
 
@@ -105,8 +105,10 @@ Include compiled script into your HTML:
     For Debian-based systems:
         
     ```
-    curl -o- http://repo.tom.ru/rpm/websockrtsprepo-1-0.deb | dpkg --install 
-    apt install websockrtspproxy # Debian-based systems
+    wget http://repo.tom.ru/deb/debian/non-free/all/ws-rtsp-repo-1.2.deb 
+    dpkg -i ./ws-rtsp-repo-1.2.deb 
+    apt update
+    apt install ws-rtsp-proxy # Debian-based systems
     ```
 
     or Fedora:
@@ -125,3 +127,43 @@ Include compiled script into your HTML:
 ```
 > service ws_rtsp start
 ```
+
+
+### How RTSP proxy works?
+
+RTSP player establish connection with proxy with following protocol:
+
+1. Connect to RTSP channel by connecting websocket with "rtsp" protocol specified and get connection id
+
+    ```
+    c>s:
+    WSP 1.0 INIT\r\n
+    host <RTSP stream host>\r\n
+    port <RTSP stream port>\r\n\r\n
+    
+    s>c:
+    INIT <connection_id>\r\n\r\n
+    
+    conection_id = -1 means error
+    ```
+
+2. Connect to RTP channel by connecting websocket with "rtp" protocol
+
+    ```
+    c>s:
+    WSP 1.0 INIT\r\n
+    RTSP <connection_id achieved from RTSP socket initialization>\r\n\r\n
+    
+    s>c:
+    INIT <connection_id>\r\n\r\n
+    
+    conection_id = -1 means error
+    ```
+
+3. RTP channel should send interleaved data with 4 byte header ($\<channel\>\<size\>). Separate RTP is not supported at this moment
+
+![](http://www.specforge.com/images/html5_rtsp_player/ws_rtsp_proxy.png)
+
+
+Have any suggestions for improving work of our player? 
+Feel free to leave comments or ideas  specforge@gmail.com

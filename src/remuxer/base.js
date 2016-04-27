@@ -2,6 +2,8 @@ let track_id = 1;
 export class BaseRemuxer {
 
     static PTSNormalize(value, reference) {
+        return value;
+
         var offset;
         if (reference === undefined) {
             return value;

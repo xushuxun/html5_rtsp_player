@@ -1,9 +1,26 @@
 {
-  "author": "specforge",
   "name": "html5_rtsp_player",
-  "version": "0.0.12",
+  "version": "0.0.17",
   "description": "HTML5 MSE RTSP player over websockets",
   "license": "Apache2",
+  "author": "SpecForge <specforge@gmail.com> (http://specforge.com/)",
+  "homepage": "http://specforge.com/",
+  "keywords": ["rtsp", "mse", "streaming"],
+  "contributors": [
+    {
+      "name": "Alexey Gornostaev",
+      "email": "kreopt@gmail.com",
+      "url": "https://github.com/kreopt/"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SpecForge/html5_rtsp_player.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SpecForge/html5_rtsp_player/issues",
+    "email": "specforge@gmail.com"
+  },
   "devDependencies": {
     "babel-core": "^6.5.2",
     "babel-loader": "^6.2.3",
@@ -23,7 +40,7 @@
     "webpack": "^1.12.14"
   },
   "dependencies": {
-    "bp_event": "^1.0.1",
+    "bp_event": "^1.1.2",
     "bp_logger": "^1.0.3",
     "bp_statemachine": "^1.0.0"
   }

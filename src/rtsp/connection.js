@@ -38,7 +38,7 @@ export class RTSPWebsocketBackend {
                 this.rtpproxy.set_disconnect_handler(()=>{});
                 this.rtpproxy.close();
             }
-            this.eventSource.trigger('disconnected');
+            this.eventSource.dispatchEvent('disconnected');
             setTimeout(()=>{
                 this.ready = this.connect();
             }, 3000);
@@ -61,7 +61,7 @@ export class RTSPWebsocketBackend {
                 }
             });
             return this.rtpproxy.connect('rtp').then(()=>{
-                this.eventSource.trigger('connected');
+                this.eventSource.dispatchEvent('connected');
             });
         });
     }

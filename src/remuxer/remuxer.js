@@ -3,6 +3,7 @@ import {AACTrackConverter} from './aac';
 import {H264TrackConverter} from './h264';
 import {MSE} from '../video_presenters/mse';
 import {Log} from 'bp_logger';
+import {EventEmitter} from 'bp_event';
 
 export class Remuxer {
     static TrackConverters = {
@@ -11,6 +12,7 @@ export class Remuxer {
     };
 
     constructor() {
+        this.eventSource = new EventEmitter();
         this.initialized = false;
         this.initSegment = null;
         this.tracks = {};
@@ -92,6 +94,7 @@ export class Remuxer {
         for (let track_type in this.streams) {
             this.streams[track_type].sendTeardown();
         }
+        this.eventSource.dispatchEvent('stopped');
     }
 
     detachMSE() {
@@ -104,26 +107,28 @@ export class Remuxer {
             for (let track_type in this.tracks) {
                 if (!this.tracks[track_type].readyToDecode) return;
             }
-            this.init();
+            try {
+                this.init();
+            } catch (e) {
+                this.eventSource.dispatchEvent('error', {'reason': e.message});
+                Log.error(e.message);
+                this.sendTeardown();
+                return;
+            }
         }
         if (!this.enabled) return;
         if (this.mse ) {
-            let flushRange = {start:Number.MAX_SAFE_INTEGER, end: 0};
             for (let track_type in this.tracks) {
                 let track = this.tracks[track_type];
                 let pay = track.getPayload();
                 if (pay && pay.byteLength) {
                     let mdat = MP4.mdat(pay);    // TODO: order independent implementation
                     let moof = MP4.moof(track.seq, track.firstDTS, track.mp4track);
-                    flushRange.start = Math.min(flushRange.start, track.firstDTS);
-                    flushRange.end = Math.max(flushRange.end, track.firstDTS+track.mp4track.lastDuration||0);
+                    // console.log(`${track_type}: ${track.firstDTS}`);
                     this.mse.feed(moof);
                     this.mse.feed(mdat);
                     track.flush();
                 }
-            }
-            if (flushRange.end!=0) {
-                this.mse.addFlushRange({start: flushRange.start/90000, end: flushRange.end/90000});
             }
         } else {
             for (let track_type in this.tracks) {

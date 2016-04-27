@@ -169,6 +169,7 @@ export class H264TrackConverter extends BaseRemuxer {
                     if (sampleDuration <= 0) {
                         Log.log(`invalid sample duration at PTS/DTS: ${avcSample.pts}/${avcSample.dts}|dts norm: ${dtsnorm}|lastDTS: ${lastDTS}:${sampleDuration}`);
                         sampleDuration = 1;
+                        // FIXME: skip frame?
                     }
                     //mp4Sample.duration = sampleDuration;
                 } else {
