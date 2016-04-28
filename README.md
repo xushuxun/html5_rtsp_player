@@ -15,6 +15,13 @@ html5_rtsp_player.js is written in ECMAScript6, and transpiled in ECMAScript5 us
 
 Link to server running with websock_rtsp_proxy and test page http://specforge.com/html5playerstream/index.html
 
+HTML5 Player update test page
+We've added such feature which supports Local Fast Playback mode up to 2 minutes duration. 
+In this mode, you can view the video at a speed of x0,5 to x5. 
+* If you want activate this mode, click on timeline.
+* To return to normal playback rate, press «live».
+This mode is useful to see what you missed.
+
 Browser support: 
 
 * Firefox v.42+
