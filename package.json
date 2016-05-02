@@ -1,6 +1,6 @@
 {
   "name": "html5_rtsp_player",
-  "version": "0.0.17",
+  "version": "0.0.19",
   "description": "HTML5 MSE RTSP player over websockets",
   "license": "Apache2",
   "author": "SpecForge <specforge@gmail.com> (http://specforge.com/)",

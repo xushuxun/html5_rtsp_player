@@ -142,6 +142,10 @@ export class H264TrackConverter extends BaseRemuxer {
             let offset = 0;
             let samples=[];
 
+            this.mp4track.samples.sort(function(a, b) {
+                return (a.pts-b.pts);
+            });
+
             let ptsnorm, dtsnorm, sampleDuration=0 ,mp4Sample, lastDTS;
             while (this.mp4track.samples.length) {
                 let avcSample = this.mp4track.samples.shift();

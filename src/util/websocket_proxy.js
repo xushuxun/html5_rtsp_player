@@ -17,7 +17,12 @@ export class WebSocketProxy {
     }
 
     close() {
-        this.sock.close();
+        return new Promise((resolve)=>{
+            this.sock.onclose = ()=>{
+                resolve();
+            };
+            this.sock.close();
+        });
     }
 
     initConnection() {
@@ -48,12 +53,12 @@ export class WebSocketProxy {
                     reject();
                 }
             };
-            this.sock.onerror = ()=>{
-                Log.error(arguments);
+            this.sock.onerror = (e)=>{
+                Log.error(`[${this.protocol}] ${e.type}`);
                 this.sock.close();
             };
-            this.sock.onclose = ()=>{
-                Log.error(arguments);
+            this.sock.onclose = (e)=>{
+                Log.error(`[${this.protocol}] ${e.type}. code: ${e.code}`);
                 this.disconnect_handler();
             };
         });

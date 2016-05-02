@@ -79,12 +79,15 @@ export class RTSPClientSM extends StateMachine {
     stop() {
         this.started = false;
         this.shouldReconnect = false;
-        this.mse = null;
+        // this.mse = null;
     }
 
     reset() {
         this.methods = [];
         this.tracks = [];
+        for (let stream in this.streams) {
+            this.streams[stream].reset();
+        }
         this.streams={};
         this.contentBase = "";
         this.state = null;
@@ -93,6 +96,9 @@ export class RTSPClientSM extends StateMachine {
         this.session = null;
         this.vtrack_idx = -1;
         this.atrack_idx = -1;
+        if (this.remuxer) {
+            this.remuxer.detachMSE();
+        }
         this.stopStreamFlush();
 
         this.mse.reset();
@@ -195,7 +201,7 @@ export class RTSPClientSM extends StateMachine {
     startStreamFlush() {
         this.flushInterval = setInterval(()=>{
             if (this.remuxer) this.remuxer.flush();
-        }, 200); // TODO: configurable
+        }, 1000); // TODO: configurable
     }
 
     stopStreamFlush() {

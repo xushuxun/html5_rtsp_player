@@ -30,12 +30,10 @@ export class NALU {
       this.ntype     = ntype;
       this.nri       = nri;
       this.timestamp = timestamp;
-      this.bodySize  = data.byteLength;
     }
 
     appendData(idata) {
       this.data = appendByteArray(this.data, idata);
-      this.bodySize = this.data.byteLength;
     }
 
     type() {
@@ -43,14 +41,15 @@ export class NALU {
     }
 
     getSize() {
-      return 2 + 2 + 1 + this.data.byteLength;
+      return 4 + 1 + this.data.byteLength;
     }
 
     getData() {
-        let header = new ArrayBuffer(5);
-        let view = new DataView(header);
+        let header = new Uint8Array(5+this.data.byteLength);
+        let view = new DataView(header.buffer);
         view.setUint32(0, this.data.byteLength+1);
         view.setUint8(4, (0x0 & 0x80) | (this.nri & 0x60) | (this.ntype & 0x1F));
-        return new Uint8Array(appendByteArray(header, this.data));
+        header.set(this.data, 5);
+        return header;
     }
 }

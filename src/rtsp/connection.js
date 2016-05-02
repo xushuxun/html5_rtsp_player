@@ -23,7 +23,9 @@ export class RTSPWebsocketBackend {
     }
 
     reconnect() {
-        this.proxy.initConnection();
+        return this.disconnect().then(()=>{
+            return this.connect();
+        });
     }
 
     connect() {
@@ -67,10 +69,11 @@ export class RTSPWebsocketBackend {
     }
 
     disconnect() {
-        this.proxy.sock.close();
+        let promises = [this.proxy.close()];
         if (this.rtpproxy) {
-            this.rtpproxy.sock.close();
+            promises.push(this.rtpproxy.close());
         }
+        return Promise.all(promises);
     }
 
     socket() {
@@ -132,6 +135,16 @@ export class RTSPConnection {
     disconnect() {
         this.cSeq = 0;
         this._backend.disconnect();
+    }
+
+    setEndpoint({host, port, urlpath, auth}) {
+        this.url = urlpath;
+        this._backend.setEndpoint({host, port, auth});
+    }
+
+    reconnect() {
+        this.cSeq = 0;
+        return this._backend.reconnect();
     }
 
     get backend() {

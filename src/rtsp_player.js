@@ -22,7 +22,10 @@ export class RTSPPlayer {
             this.url = url;
             let parsed = Url.parse(url);
             this.connection.setEndpoint(parsed);
-            this.connection.reconnect();
+            this.connection.reconnect().then(()=>{
+                this.client.stop();
+                this.client.reconnect();
+            });
         } else {
             this.player.src = url;
         }

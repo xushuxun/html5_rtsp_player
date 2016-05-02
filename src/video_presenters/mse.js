@@ -100,9 +100,9 @@ export class MSE {
     feedNext() {
         if (!this.updating) {
             let canAppend=true;
-            if (this.sourceBuffer.buffered.length) {
-                canAppend = this.players[0].currentTime - 1-this.sourceBuffer.buffered.start(0)<3;
-            }
+            // if (this.sourceBuffer.buffered.length) {
+            //     canAppend = this.players[0].currentTime - 1-this.sourceBuffer.buffered.start(0)<3;
+            // }
             if (canAppend) {
                 if (this.queue.length) {
                     this.doAppend(this.queue.shift());

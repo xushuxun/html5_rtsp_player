@@ -1,10 +1,10 @@
 // TODO: asm.js
 
 export function appendByteArray(buffer1, buffer2) {
-    var tmp = new Uint8Array((buffer1.byteLength|0) + (buffer2.byteLength|0));
-    tmp.set(new Uint8Array(buffer1), 0);
-    tmp.set(new Uint8Array(buffer2), buffer1.byteLength|0);
-    return tmp.buffer;
+    let tmp = new Uint8Array((buffer1.byteLength|0) + (buffer2.byteLength|0));
+    tmp.set(buffer1, 0);
+    tmp.set(buffer2, buffer1.byteLength|0);
+    return tmp;
 }
 
 export function appendByteArrayAsync(buffer1, buffer2) {

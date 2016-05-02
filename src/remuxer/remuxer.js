@@ -20,6 +20,9 @@ export class Remuxer {
         this.streams = {};
         this.enabled = false;
         this.mse_ready = true;
+
+        this.errorListener = this.sendTeardown.bind(this);
+        this.closeListener = this.sendTeardown.bind(this);
     }
 
     setTrack(track, stream) {
@@ -73,15 +76,19 @@ export class Remuxer {
             this.detachMSE()
         }
         this.mse = mse;
-        this.mse.eventSource.addEventListener('error', ()=> {
-            this.sendTeardown();
-        });
-        this.mse.eventSource.addEventListener('sourceclose', ()=> {
-            this.sendTeardown();
-        });
+        this.mse.eventSource.addEventListener('error', this.errorListener);
+        this.mse.eventSource.addEventListener('sourceclose', this.closeListener);
 
         if (this.initialized) {
             this.initMSE();
+        }
+    }
+
+    detachMSE() {
+        if (this.mse) {
+            this.mse.eventSource.removeEventListener('error', this.errorListener);
+            this.mse.eventSource.removeEventListener('sourceclose', this.closeListener);
+            this.mse = null;
         }
     }
 
@@ -95,10 +102,6 @@ export class Remuxer {
             this.streams[track_type].sendTeardown();
         }
         this.eventSource.dispatchEvent('stopped');
-    }
-
-    detachMSE() {
-        this.mse = null;
     }
 
     flush() {

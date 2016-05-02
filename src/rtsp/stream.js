@@ -14,6 +14,13 @@ export class RTSPStream {
         this.keepaliveInterval = null;
     }
 
+    reset() {
+        this.stopKeepAlive();
+        this.client.connection.backend.forgetRTPChannel(this.rtpChannel);
+        this.client = null;
+        this.track = null;
+    }
+
     start() {
         return this.sendSetup().then(this.sendPlay.bind(this));
     }
