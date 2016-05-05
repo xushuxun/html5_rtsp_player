@@ -172,5 +172,5 @@ RTSP player establish connection with proxy with following protocol:
 ![](http://www.specforge.com/images/html5_rtsp_player/ws_rtsp_proxy.png)
 
 
-Have any suggestions for improving work of our player? 
+Have any suggestions to improve our player? 
 Feel free to leave comments or ideas  specforge@gmail.com
