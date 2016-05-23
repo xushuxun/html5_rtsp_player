@@ -5,7 +5,7 @@ that works directly on top of a standard HTML <video> element.
 It requires support of HTML5 Video with Media Sources Extensions for playback. Also player relies on server-side websocket 
 proxy for retransmitting RTSP streams to browser.
 
-![](http://www.specforge.com/images/html5_rtsp_player/html5_player.png)
+![](https://www.specforge.com/images/html5_player.png)
       
 It works by muxing RTP h.264 and MP4A-LATM payload into ISO BMFF (MP4) fragments. 
 
@@ -169,7 +169,7 @@ RTSP player establish connection with proxy with following protocol:
 
 3. RTP channel should send interleaved data with 4 byte header ($\<channel\>\<size\>). Separate RTP is not supported at this moment
 
-![](http://www.specforge.com/images/html5_rtsp_player/ws_rtsp_proxy.png)
+![](https://www.specforge.com/images/ws_rtsp_proxy.png)
 
 
 Have any suggestions to improve our player? 
