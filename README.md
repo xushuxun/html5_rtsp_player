@@ -11,8 +11,10 @@ It works by muxing RTP h.264 and MP4A-LATM payload into ISO BMFF (MP4) fragments
 
 html5_rtsp_player.js is written in ECMAScript6, and transpired in ECMAScript5 using Babel.
 
-### HLS player link
-Here you can find HLS player over websocket  https://github.com/SpecForge/html5_hls_player
+```
+* HLS player link
+* Here you can find HLS player over websocket  https://github.com/SpecForge/html5_hls_player
+```
 
 ## Live test stream
 
