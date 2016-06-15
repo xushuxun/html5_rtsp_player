@@ -9,7 +9,10 @@ proxy for retransmitting RTSP streams to browser.
       
 It works by muxing RTP h.264 and MP4A-LATM payload into ISO BMFF (MP4) fragments. 
 
-html5_rtsp_player.js is written in ECMAScript6, and transpiled in ECMAScript5 using Babel.
+html5_rtsp_player.js is written in ECMAScript6, and transpired in ECMAScript5 using Babel.
+
+### HLS player link
+Here you can find HLS player over websocket  https://github.com/SpecForge/html5_hls_player
 
 ## Live test stream
 
@@ -109,11 +112,12 @@ Include compiled script into your HTML:
 
 1. Install websocket proxy
 
-    For Debian-based systems:
+    For Debian-based systems (tested on Ubuntu 16.04):
         
     ```
-    wget http://repo.tom.ru/deb/debian/non-free/all/ws-rtsp-repo-1.2.deb 
-    dpkg -i ./ws-rtsp-repo-1.2.deb 
+    wget -O - http://repo.tom.ru/deb/specforge.gpg.key | sudo apt-key add -
+    wget http://repo.tom.ru/deb/pool/non-free/w/ws-rtsp-repo/ws-rtsp-repo_1.3_all.deb
+    dpkg -i ./ws-rtsp-repo_1.3_all.deb
     apt update
     apt install ws-rtsp-proxy # Debian-based systems
     ```
@@ -124,6 +128,9 @@ Include compiled script into your HTML:
     dnf install http://repo.tom.ru/rpm/websock_rtsp_repo-1-0.noarch.rpm
     dnf install websock_rtsp_proxy
     ```
+
+    Note that this package depends on systemd and gcc5+ runtime so it can be installed 
+    only on recent distribution versions. 
 
 2. Configure port in /etc/ws_rtsp.ini
 
