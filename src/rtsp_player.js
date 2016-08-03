@@ -11,7 +11,7 @@ export class RTSPPlayer {
         this.isReplaced = url!==undefined;
         if (this.isReplaced) {
             let parsed = Url.parse(url);
-            this.connection = new RTSPConnection(parsed.host, parsed.port, parsed.urlpath, {}, RTSPWebsocketBackend);
+            this.connection = new RTSPConnection(parsed.host, parsed.port, parsed.urlpath, {login: parsed.user, password: parsed.pass}, RTSPWebsocketBackend);
             this.client = new RTSPClientSM(this.connection, this.player);
         }
 
