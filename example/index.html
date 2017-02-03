@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Streamedian player example</title>
+    <style>
+        #test_video {
+            width: 720px;
+        }
+    </style>
+</head>
+<body>
+<video id="test_video" controls autoplay>
+    <source src="rtsp://127.0.0.1:8554/test" type="application/x-rtsp">
+</video>
+<script src="streamedian.js"></script>
+</body>
+</html>

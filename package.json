@@ -1,11 +1,16 @@
 {
-  "name": "html5_rtsp_player",
-  "version": "0.0.19",
+  "name": "streamedian",
+  "version": "0.3.2",
   "description": "HTML5 MSE RTSP player over websockets",
   "license": "Apache2",
-  "author": "SpecForge <specforge@gmail.com> (http://specforge.com/)",
-  "homepage": "http://specforge.com/",
-  "keywords": ["rtsp", "mse", "streaming"],
+  "author": "Streamedian <streamedian.player@gmail.com> (http://streamedian.com/)",
+  "homepage": "http://streamedian.com/",
+  "keywords": [
+    "html5",
+    "rtsp",
+    "mse",
+    "streaming"
+  ],
   "contributors": [
     {
       "name": "Alexey Gornostaev",
@@ -15,33 +20,23 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/SpecForge/html5_rtsp_player.git"
+    "url": "git://github.com/Streamedian/html5_rtsp_player.git"
   },
   "bugs": {
-    "url": "https://github.com/SpecForge/html5_rtsp_player/issues",
+    "url": "git://github.com/Streamedian/html5_rtsp_player/issues",
     "email": "specforge@gmail.com"
   },
   "devDependencies": {
-    "babel-core": "^6.5.2",
-    "babel-loader": "^6.2.3",
-    "babel-preset-es2015": "^6.5.0",
-    "babel-preset-stage-0": "^6.5.0",
-    "babel-preset-stage-1": "^6.5.0",
-    "babel-preset-stage-2": "^6.5.0",
-    "babel-preset-stage-3": "^6.5.0",
-    "gulp": "^3.9.0",
-    "gulp-babel": "^6.1.0",
-    "gulp-concat": "^2.6.0",
-    "gulp-load-plugins": "^1.1.0",
-    "gulp-rename": "^1.2.2",
-    "gulp-sourcemaps": "^1.6.0",
-    "gulp-uglify": "^1.4.2",
-    "gulp-wrap": "^0.11.0",
-    "webpack": "^1.12.14"
+    "rollup": "^0.33.0",
+    "rollup-plugin-alias": "^1.2.0",
+    "rollup-plugin-babel": "^2.6.1",
+    "rollup-plugin-buble": "^0.12.1",
+    "rollup-plugin-node-resolve": "^1.7.1"
   },
   "dependencies": {
     "bp_event": "^1.1.2",
     "bp_logger": "^1.0.3",
-    "bp_statemachine": "^1.0.0"
+    "bp_statemachine": "^1.0.13",
+    "jsencrypt": "git+https://github.com/kreopt/jsencrypt.git"
   }
 }
