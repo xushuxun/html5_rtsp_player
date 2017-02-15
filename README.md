@@ -119,7 +119,7 @@ export default {
 
 
 ```
-> npm install bp_event bp_log bp_statemachine
+> npm install bp_event bp_logger bp_statemachine
 > rollup -c
 ```
 
