@@ -1,5 +1,5 @@
 // TODO: asm.js
-import {Log} from 'bp_logger';
+import {Log} from '../../../deps/bp_logger.js';
 export default class RTP {
     constructor(pkt/*uint8array*/, sdp) {
         let bytes = new DataView(pkt.buffer, pkt.byteOffset, pkt.byteLength);

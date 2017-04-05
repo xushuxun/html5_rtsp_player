@@ -1,6 +1,6 @@
 {
   "name": "streamedian",
-  "version": "0.3.2",
+  "version": "0.3.4",
   "description": "HTML5 MSE RTSP player over websockets",
   "license": "Apache2",
   "author": "Streamedian <streamedian.player@gmail.com> (http://streamedian.com/)",
@@ -20,10 +20,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/Streamedian/html5_rtsp_player.git"
+    "url": "https://github.com/Streamedian/html5_rtsp_player.git"
   },
   "bugs": {
-    "url": "git://github.com/Streamedian/html5_rtsp_player/issues",
+    "url": "https://github.com/Streamedian/html5_rtsp_player/issues",
     "email": "specforge@gmail.com"
   },
   "devDependencies": {

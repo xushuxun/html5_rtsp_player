@@ -1,4 +1,4 @@
-import RTP from './rtp';
+import RTP from './rtp.js';
 
 export default class RTPFactory {
     constructor(sdp) {

@@ -1,5 +1,6 @@
-import {NALU} from './NALU';
-import {Log} from 'bp_logger';
+import {Log} from '../../deps/bp_logger.js';
+import {NALU} from './NALU.js';
+
 // TODO: asm.js
 export class NALUAsm {
     static get NALTYPE_FU_A() {return 28;}
@@ -21,7 +22,7 @@ export class NALUAsm {
 
         if (27 >= naltype && 0 < naltype) {
             /* This RTP package is a single NALU, dispatch and forget, 0 is undefined */
-            return new NALU(naltype, nri, rawData.subarray(nal_start_idx), dts, pts);
+            return [new NALU(naltype, nri, rawData.subarray(nal_start_idx), dts, pts)];
             //return;
         }
 
@@ -66,7 +67,7 @@ export class NALUAsm {
         if (1 === nfend) {
             let ret = this.nalu;
             this.nalu = null;
-            return ret;
+            return [ret];
         }
     }
 }

@@ -1,5 +1,6 @@
-import {AACFrame} from './AACFrame';
-import {AACParser} from "../parsers/aac";
+import {AACFrame} from './AACFrame.js';
+import {BitArray} from '../util/binary';
+// import {AACParser} from "../parsers/aac.js";
 // TODO: asm.js
 export class AACAsm {
     constructor() {
@@ -28,24 +29,54 @@ export class AACAsm {
 
 
         let auHeadersLengthPadded = 0;
+        let offset = 0;
+        let ts = (Math.round(pkt.getTimestampMS()/1024) << 10) * 90000 / this.config.samplerate;
         if (0 !== configHeaderLength) {
             /* The AU header section is not empty, read it from payload */
             let auHeadersLengthInBits = data.getUint16(0); // Always 2 octets, without padding
-            auHeadersLengthPadded = 2 + ((auHeadersLengthInBits + (auHeadersLengthInBits & 0x7)) >>> 3); // Add padding
+            auHeadersLengthPadded = 2 + (auHeadersLengthInBits>>>3) + ((auHeadersLengthInBits & 0x7)?1:0); // Add padding
 
             //this.config = AACParser.parseAudioSpecificConfig(new Uint8Array(rawData, 0 , auHeadersLengthPadded));
             // TODO: parse config
-        }
-
-        let aacData = rawData.subarray(auHeadersLengthPadded);
-        let offset = 0;
-        while (true) {
-            if (aacData[offset] !=255) break;
+            let frames = [];
+            let frameOffset=0;
+            let bits = new BitArray(rawData.subarray(2 + offset));
+            let cts = 0;
+            let dts = 0;
+            for (let offset=0; offset<auHeadersLengthInBits;) {
+                let size = bits.readBits(sizeLength);
+                let idx = bits.readBits(offset?indexDeltaLength:indexLength);
+                offset+=sizeLength+(offset?indexDeltaLength:indexLength)/*+2*/;
+                if (/*ctsPresent &&*/ CTSDeltaLength) {
+                    let ctsPresent = bits.readBits(1);
+                    cts = bits.readBits(CTSDeltaLength);
+                    offset+=CTSDeltaLength;
+                }
+                if (/*dtsPresent && */DTSDeltaLength) {
+                    let dtsPresent = bits.readBits(1);
+                    dts = bits.readBits(DTSDeltaLength);
+                    offset+=CTSDeltaLength;
+                }
+                if (RandomAccessIndication) {
+                    bits.skipBits(1);
+                    offset+=1;
+                }
+                if (StreamStateIndication) {
+                    bits.skipBits(StreamStateIndication);
+                    offset+=StreamStateIndication;
+                }
+                frames.push(new AACFrame(rawData.subarray(auHeadersLengthPadded + frameOffset, auHeadersLengthPadded + frameOffset + size), ts+dts, ts+cts));
+                frameOffset+=size;
+            }
+            return frames;
+        } else {
+            let aacData = rawData.subarray(auHeadersLengthPadded);
+            while (true) {
+                if (aacData[offset] !=255) break;
+                ++offset;
+            }
             ++offset;
+            return [new AACFrame(rawData.subarray(auHeadersLengthPadded+offset), ts)];
         }
-
-        ++offset;
-        let ts = (Math.round(pkt.getTimestampMS()/1024) << 10) * 90000 / this.config.samplerate;
-        return new AACFrame(rawData.subarray(auHeadersLengthPadded+offset), ts);
     }
 }

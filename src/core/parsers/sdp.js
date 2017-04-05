@@ -1,6 +1,6 @@
-import {PayloadType} from '../defs';
+import {getTagged} from '../../deps/bp_logger';
+import {PayloadType} from '../defs.js';
 
-import {getTagged} from 'bp_logger';
 const Log = getTagged("parser:sdp");
 
 export class SDPParser {

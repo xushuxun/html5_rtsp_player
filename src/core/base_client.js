@@ -1,8 +1,8 @@
-import {Log} from 'bp_logger';
-import {EventEmitter} from 'bp_event';
+import {Log} from '../deps/bp_logger.js';
+import {EventEmitter} from '../deps/bp_event.js';
 
 export class BaseClient {
-    constructor(transport, options={flush: 100}) {
+    constructor(options={flush: 100}) {
         this.options = options;
         this.eventSource = new EventEmitter();
 
@@ -22,7 +22,6 @@ export class BaseClient {
         };
         this._onConnect = this.onConnected.bind(this);
         this._onDisconnect = this.onDisconnected.bind(this);
-        this.attachTransport(transport);
     }
 
     static streamType() {
@@ -34,7 +33,9 @@ export class BaseClient {
     }
 
     attachTransport(transport) {
-        this.detachTransport();
+        if (this.transport) {
+            this.detachTransport();
+        }
         this.transport = transport;
         this.transport.eventSource.addEventListener('data', this._onData);
         this.transport.eventSource.addEventListener('connected', this._onConnect);
@@ -46,7 +47,11 @@ export class BaseClient {
             this.transport.eventSource.removeEventListener('data', this._onData);
             this.transport.eventSource.removeEventListener('connected', this._onConnect);
             this.transport.eventSource.removeEventListener('disconnected', this._onDisconnect);
+            this.transport = null;
         }
+    }
+    reset() {
+
     }
 
     start() {

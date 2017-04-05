@@ -1,8 +1,6 @@
-import {NALUAsm} from '../elementary/NALUAsm';
-import {H264Parser} from '../parsers/h264';
-import {base64ToArrayBuffer} from '../util/binary';
-import {BaseRemuxer} from './base';
-import {getTagged} from 'bp_logger';
+import {getTagged} from '../../deps/bp_logger.js';
+import {H264Parser} from '../parsers/h264.js';
+import {BaseRemuxer} from './base.js';
 
 const Log = getTagged("remuxer:h264"); 
 // TODO: asm.js

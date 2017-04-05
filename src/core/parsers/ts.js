@@ -1,6 +1,6 @@
-import {BitArray, bitSlice} from '../util/binary';
-import {PESAsm} from './pes';
-import {PayloadType} from '../defs';
+import {BitArray} from '../util/binary.js';
+import {PESAsm} from './pes.js';
+import {PayloadType} from '../defs.js';
 
 export class PESType {
     static get AAC() {return  0x0f;}  // ISO/IEC 13818-7 ADTS AAC (MPEG-2 lower bit-rate audio)

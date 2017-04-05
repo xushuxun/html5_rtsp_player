@@ -1,7 +1,7 @@
-import {getTagged} from 'bp_logger';
-import {BaseTransport} from "../core/base_transport";
-import {CPU_CORES} from "../core/util/browser";
-import {JSEncrypt} from 'jsencrypt';
+import {getTagged} from '../deps/bp_logger.js';
+import {JSEncrypt} from '../deps/jsencrypt.js';
+import {BaseTransport} from "../core/base_transport.js";
+import {CPU_CORES} from "../core/util/browser.js";
 
 const LOG_TAG = "transport:ws";
 const Log = getTagged(LOG_TAG);
@@ -18,6 +18,13 @@ export default class WebsocketTransport extends BaseTransport {
         this.workers = 1;
         this.socket_url = options.socket;
         this.ready = this.connect();
+    }
+
+    destroy() {
+        return this.disconnect().then(()=>{
+            return super.destroy();
+        });
+
     }
 
     static canTransfer(stream_type) {
@@ -68,7 +75,7 @@ export default class WebsocketTransport extends BaseTransport {
     disconnect() {
         let promises = [];
         for (let i=0; i<this.proxies.length; ++i) {
-            this.proxies[i].close();
+            promises.push(this.proxies[i].close());
         }
         this.proxies= [];
         if (this.proxies.length) {

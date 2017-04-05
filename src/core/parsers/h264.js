@@ -1,5 +1,5 @@
-import {ExpGolomb} from '../util/exp-golomb';
-import {NALU} from '../elementary/NALU';
+import {ExpGolomb} from '../util/exp-golomb.js';
+import {NALU} from '../elementary/NALU.js';
 
 export class H264Parser {
 

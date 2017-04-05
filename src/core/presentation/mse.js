@@ -1,6 +1,6 @@
-import {EventEmitter} from 'bp_event';
-import {MP4Inspect} from '../iso-bmff/mp4-inspector';
-import {getTagged} from 'bp_logger';
+import {EventEmitter} from '../../deps/bp_event.js';
+import {getTagged} from '../../deps/bp_logger.js';
+//import {MP4Inspect} from '../iso-bmff/mp4-inspector.js';
 
 const LOG_TAG = "mse";
 const Log = getTagged(LOG_TAG);
@@ -19,8 +19,9 @@ export class Buffer {
         Log.debug(`Use codec: ${codec}`);
 
         this.sourceBuffer = this.mediaSource.addSourceBuffer(codec);
+        this.eventSource = new EventEmitter(this.sourceBuffer);
 
-        this.sourceBuffer.addEventListener('updatestart', (e)=> {
+        this.eventSource.addEventListener('updatestart', (e)=> {
             // this.updating = true;
             // Log.debug('update start');
             if (this.cleaning) {
@@ -28,14 +29,14 @@ export class Buffer {
             }
         });
 
-        this.sourceBuffer.addEventListener('update', (e)=> {
+        this.eventSource.addEventListener('update', (e)=> {
             // this.updating = true;
             if (this.cleaning) {
                 Log.debug(`${this.codec} cleaning update`);
             }
         });
 
-        this.sourceBuffer.addEventListener('updateend', (e)=> {
+        this.eventSource.addEventListener('updateend', (e)=> {
             // Log.debug('update end');
             // this.updating = false;
             if (this.cleaning) {
@@ -64,7 +65,7 @@ export class Buffer {
             this.feedNext();
         });
 
-        this.sourceBuffer.addEventListener('error', (e)=> {
+        this.eventSource.addEventListener('error', (e)=> {
             Log.debug(`Source buffer error: ${this.mediaSource.readyState}`);
             if (this.mediaSource.sourceBuffers.length) {
                 this.mediaSource.removeSourceBuffer(this.sourceBuffer);
@@ -72,7 +73,7 @@ export class Buffer {
             this.parent.eventSource.dispatchEvent('error');
         });
 
-        this.sourceBuffer.addEventListener('abort', (e)=> {
+        this.eventSource.addEventListener('abort', (e)=> {
             Log.debug(`Source buffer aborted: ${this.mediaSource.readyState}`);
             if (this.mediaSource.sourceBuffers.length) {
                 this.mediaSource.removeSourceBuffer(this.sourceBuffer);
@@ -87,6 +88,7 @@ export class Buffer {
     }
 
     destroy() {
+        this.eventSource.destroy();
         this.clear();
         this.queue = [];
         this.mediaSource.removeSourceBuffer(this.sourceBuffer);
@@ -253,14 +255,16 @@ export class MSE {
 
     constructor (players) {
         this.players = players;
-        this.eventSource = new EventEmitter();
         this.mediaSource = new MediaSource();
+        this.eventSource = new EventEmitter(this.mediaSource);
         this.reset();
     }
 
     destroy() {
-        this.clear();
+        this.reset();
         this.eventSource.destroy();
+        this.mediaSource = null;
+        this.eventSource = null;
     }
 
     play() {
@@ -293,23 +297,14 @@ export class MSE {
     }
 
     clear() {
-        for (let track in this.buffers) {
-            this.buffers[track].destroy();
-            delete this.buffers[track];
-        }
-        if (this.mediaSource.readyState == 'open') {
-            this.mediaSource.duration = 0;
-            this.mediaSource.endOfStream();
-        }
+        this.reset();
         this.players.forEach((video)=>{video.src = URL.createObjectURL(this.mediaSource)});
 
         return this.setupEvents();
     }
 
     setupEvents() {
-        if (this._sourceOpen) this.mediaSource.removeEventListener('sourceopen', this._sourceOpen);
-        if (this._sourceEnded) this.mediaSource.removeEventListener('sourceended', this._sourceEnded);
-        if (this._sourceClose) this.mediaSource.removeEventListener('sourceclose', this._sourceClose);
+        this.eventSource.clear();
         this.resolved = false;
         this.mediaReady = new Promise((resolve, reject)=> {
             this._sourceOpen = ()=> {
@@ -325,17 +320,25 @@ export class MSE {
             this._sourceClose = ()=>{
                 Log.debug(`Media source closed: ${this.mediaSource.readyState}`);
                 if (this.resolved) {
-                    this.eventSource.dispatchEvent('sourceclose');
+                    this.eventSource.dispatchEvent('sourceclosed');
                 }
             };
-            this.mediaSource.addEventListener('sourceopen', this._sourceOpen);
-            this.mediaSource.addEventListener('sourceended', this._sourceEnded);
-            this.mediaSource.addEventListener('sourceclose', this._sourceClose);
+            this.eventSource.addEventListener('sourceopen', this._sourceOpen);
+            this.eventSource.addEventListener('sourceended', this._sourceEnded);
+            this.eventSource.addEventListener('sourceclose', this._sourceClose);
         });
         return this.mediaReady;
     }
 
     reset() {
+        for (let track in this.buffers) {
+            this.buffers[track].destroy();
+            delete this.buffers[track];
+        }
+        if (this.mediaSource.readyState == 'open') {
+            this.mediaSource.duration = 0;
+            this.mediaSource.endOfStream();
+        }
         this.updating = false;
         this.resolved = false;
         this.buffers = {};

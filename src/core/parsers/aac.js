@@ -1,4 +1,4 @@
-import {BitArray, bitSlice} from '../util/binary';
+import {BitArray, bitSlice} from '../util/binary.js';
 
 export class AACParser {
     static get SampleRates() {return  [

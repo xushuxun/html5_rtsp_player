@@ -1,11 +1,10 @@
-import {MP4} from '../iso-bmff/mp4-generator';
-import {AACRemuxer} from './aac';
-import {H264Remuxer} from './h264';
-import {MSE} from '../presentation/mse';
-import {EventEmitter} from 'bp_event';
-import {PayloadType} from "../defs";
-
-import {getTagged} from "bp_logger";
+import {EventEmitter, EventSourceWrapper} from '../../deps/bp_event.js';
+import {getTagged} from "../../deps/bp_logger.js";
+import {MP4} from '../iso-bmff/mp4-generator.js';
+import {AACRemuxer} from './aac.js';
+import {H264Remuxer} from './h264.js';
+import {MSE} from '../presentation/mse.js';
+import {PayloadType} from "../defs.js";
 
 const LOG_TAG = "remuxer";
 const Log = getTagged(LOG_TAG);
@@ -29,17 +28,16 @@ export class Remuxer {
     constructor(mediaElement) {
         this.mse = new MSE([mediaElement]);
         this.eventSource = new EventEmitter();
+        this.mseEventSource = new EventSourceWrapper(this.mse.eventSource);
         this.mse_ready = true;
 
         this.reset();
 
         this.errorListener = this.mseClose.bind(this);
         this.closeListener = this.mseClose.bind(this);
-        this.samplesListener = this.onSamples.bind(this);
-        this.audioConfigListener = this.onAudioConfig.bind(this);
 
-        this.mse.eventSource.addEventListener('error', this.errorListener);
-        this.mse.eventSource.addEventListener('sourceclose', this.closeListener);
+        this.mseEventSource.on('error', this.errorListener);
+        this.mseEventSource.on('sourceclosed', this.closeListener);
         
         this.eventSource.addEventListener('ready', this.init.bind(this));
     }
@@ -51,9 +49,11 @@ export class Remuxer {
         this.codecs = [];
         this.streams = {};
         this.enabled = false;
+        this.mse.clear();
     }
 
     destroy() {
+        this.mseEventSource.destroy();
         this.mse.destroy();
         this.mse = null;
 
@@ -184,11 +184,12 @@ export class Remuxer {
     attachClient(client) {
         this.detachClient();
         this.client = client;
-        this.client.eventSource.addEventListener('samples', this.samplesListener);
-        this.client.eventSource.addEventListener('audio_config', this.audioConfigListener);
-        this.client.eventSource.addEventListener('tracks', this.onTracks.bind(this));
-        this.client.eventSource.addEventListener('flush', this.flush.bind(this));
-        this.client.eventSource.addEventListener('clear', ()=>{
+        this.clientEventSource = new EventSourceWrapper(this.client.eventSource);
+        this.clientEventSource.on('samples', this.samplesListener);
+        this.clientEventSource.on('audio_config', this.audioConfigListener);
+        this.clientEventSource.on('tracks', this.onTracks.bind(this));
+        this.clientEventSource.on('flush', this.flush.bind(this));
+        this.clientEventSource.on('clear', ()=>{
             this.reset();
             this.mse.clear().then(()=>{
                 this.mse.play();
@@ -198,10 +199,13 @@ export class Remuxer {
 
     detachClient() {
         if (this.client) {
-            this.client.eventSource.removeEventListener('samples', this.samplesListener);
-            this.client.eventSource.removeEventListener('audio_config', this.audioConfigListener);
-            // TODO: clear other listeners
-            // this.client.eventSource.removeEventListener('clear');
+            this.clientEventSource.destroy();
+            // this.client.eventSource.removeEventListener('samples', this.onSamples.bind(this));
+            // this.client.eventSource.removeEventListener('audio_config', this.onAudioConfig.bind(this));
+            // // TODO: clear other listeners
+            // this.client.eventSource.removeEventListener('clear', this._clearListener);
+            // this.client.eventSource.removeEventListener('tracks', this._tracksListener);
+            // this.client.eventSource.removeEventListener('flush', this._flushListener);
             this.client = null;
         }
     }

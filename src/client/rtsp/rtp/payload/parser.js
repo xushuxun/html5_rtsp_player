@@ -1,5 +1,5 @@
-import {NALUAsm} from "../../../../core/elementary/NALUAsm";
-import {AACAsm} from "../../../../core/elementary/AACAsm";
+import {NALUAsm} from "../../../../core/elementary/NALUAsm.js";
+import {AACAsm} from "../../../../core/elementary/AACAsm.js";
 
 export class RTPPayloadParser {
 

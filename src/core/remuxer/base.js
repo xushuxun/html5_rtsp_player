@@ -1,4 +1,5 @@
-import {getTagged} from 'bp_logger';
+import {getTagged} from '../../deps/bp_logger.js';
+
 const Log = getTagged('remuxer:base');
 let track_id = 1;
 export class BaseRemuxer {

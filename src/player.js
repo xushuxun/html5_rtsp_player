@@ -1,8 +1,8 @@
-import {Url} from './core/util/url';
-import {Remuxer} from './core/remuxer/remuxer';
-import DEFAULT_CLIENT from './client/rtsp/client';
-import DEFAULT_TRANSPORT from './transport/websocket';
-import {getTagged} from 'bp_logger';
+import {getTagged} from './deps/bp_logger.js';
+import {Url} from './core/util/url.js';
+import {Remuxer} from './core/remuxer/remuxer.js';
+import DEFAULT_CLIENT from './client/rtsp/client.js';
+import DEFAULT_TRANSPORT from './transport/websocket.js';
 
 const Log = getTagged('wsp');
 
@@ -15,7 +15,12 @@ export class StreamType {
     }
 
     static fromUrl(url) {
-        let parsed = Url.parse(url);
+        let parsed;
+        try {
+            parsed = Url.parse(url);
+        } catch (e) {
+            return null;
+        }
         switch (parsed.protocol) {
             case 'rtsp':
                 return StreamType.RTSP;
@@ -87,12 +92,14 @@ export class WSPlayer {
                     }
                 }
             }
-            if (!this.url) {
-                 throw new Error('No playable endpoint found');
-            }
+            // if (!this.url) {
+            //      throw new Error('No playable endpoint found');
+            // }
         }
 
-        this.setSource(this.url, this.type);
+        if (this.url) {
+            this.setSource(this.url, this.type);
+        }
 
         this.player.addEventListener('play', ()=>{
             if (!this.isPlaying()) {
@@ -135,6 +142,11 @@ export class WSPlayer {
         return StreamType.fromMime(resource.type) || StreamType.fromUrl(resource.src);
     }
 
+    canPlayUrl(src) {
+        let type = StreamType.fromUrl(src);
+        return (type in this.modules);
+    }
+
     _checkSource(src) {
         if (!src.dataset['ignore'] && src.src && !this.player.canPlayType(src.type) && (StreamType.fromMime(src.type) || StreamType.fromUrl(src.src))) {
             this.url = src.src;
@@ -144,11 +156,18 @@ export class WSPlayer {
         return false;
     }
 
-    setSource(url, type) {
+    async setSource(url, type) {
         if (this.transport) {
-            this.transport.destroy();
+            if (this.client) {
+                await this.client.detachTransport();
+            }
+            await this.transport.destroy();
         }
-        this.endpoint = Url.parse(url);
+        try {
+            this.endpoint = Url.parse(url);
+        } catch (e) {
+            return;
+        }
         this.url = url;
         let transport = this.modules[type].transport;
         this.transport = new transport.constructor(this.endpoint, this.type, transport.options);
@@ -162,15 +181,20 @@ export class WSPlayer {
 
         if (lastType!=this.type || !this.client) {
             if (this.client) {
-                this.client.destroy();
+                await this.client.destroy();
             }
             let client = this.modules[type].client;
-            this.client = new client(this.transport);
-            if (!this.remuxer) {
-                this.remuxer = new Remuxer(this.player);
-            }
-            this.remuxer.attachClient(this.client);
+            this.client = new client();
         }
+
+        this.client.reset();
+        if (this.remuxer) {
+            this.remuxer.destroy();
+            this.remuxer = null;
+        }
+        this.remuxer = new Remuxer(this.player);
+        this.remuxer.attachClient(this.client);
+
         this.client.attachTransport(this.transport);
         this.client.setSource(this.endpoint);
 
@@ -180,11 +204,15 @@ export class WSPlayer {
     }
 
     start() {
-        this.client.start();
+        if (this.client) {
+            this.client.start();
+        }
     }
 
     stop() {
-        this.client.stop();
+        if (this.client) {
+            this.client.stop();
+        }
     }
 
 }

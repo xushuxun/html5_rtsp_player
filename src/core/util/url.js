@@ -1,21 +1,25 @@
 export class Url {
     static parse(url) {
-        var ret = {};
+        let ret = {};
 
-        var regex = /^([^:]+):\/\/([^\/]+)(.*)$/;  //protocol, login, urlpath
-        var result = regex.exec(url);
+        let regex = /^([^:]+):\/\/([^\/]+)(.*)$/;  //protocol, login, urlpath
+        let result = regex.exec(url);
+
+        if (!result) {
+            throw new Error("bad url");
+        }
 
         ret.full = url;
         ret.protocol = result[1];
         ret.urlpath = result[3];
 
-        var parts = ret.urlpath.split('/');
+        let parts = ret.urlpath.split('/');
         ret.basename = parts.pop().split(/\?|#/)[0];
         ret.basepath = parts.join('/');
 
-        var loginSplit = result[2].split('@');
-        var hostport = loginSplit[0].split(':');
-        var userpass = [ null, null ];
+        let loginSplit = result[2].split('@');
+        let hostport = loginSplit[0].split(':');
+        let userpass = [ null, null ];
         if (loginSplit.length === 2) {
             userpass = loginSplit[0].split(':');
             hostport = loginSplit[1].split(':');

@@ -1,4 +1,4 @@
-import {appendByteArray} from '../util/binary';
+import {appendByteArray} from '../util/binary.js';
 
 export class NALU {
 

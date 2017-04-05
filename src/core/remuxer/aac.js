@@ -1,9 +1,6 @@
-import {AACAsm} from '../elementary/AACAsm';
-import {AACFrame} from '../elementary/AACFrame';
-import {MSE} from '../presentation/mse';
-import {BaseRemuxer} from './base';
-import {BitArray, hexToByteArray, bitSlice} from '../util/binary';
-import {getTagged} from 'bp_logger';
+import {getTagged} from '../../deps/bp_logger.js';
+import {MSE} from '../presentation/mse.js';
+import {BaseRemuxer} from './base.js';
 
 const Log = getTagged("remuxer:aac");
 // TODO: asm.js

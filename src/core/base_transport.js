@@ -1,4 +1,4 @@
-import {EventEmitter} from "bp_event";
+import {EventEmitter} from "../deps/bp_event.js";
 
 export class BaseRequest {
     constructor(data) {

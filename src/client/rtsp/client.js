@@ -1,15 +1,15 @@
-import {StateMachine} from 'bp_statemachine';
-import {SDPParser} from '../../core/parsers/sdp';
-import {RTSPStream} from './stream';
+import {getTagged} from '../../deps/bp_logger.js';
+import {StateMachine} from '../../deps/bp_statemachine.js';
+import {SDPParser} from '../../core/parsers/sdp.js';
+import {RTSPStream} from './stream.js';
 // import {RTP} from './rtp/rtp';
-import RTPFactory from './rtp/factory';
-import {MessageBuilder} from './message';
-import {RTPPayloadParser} from './rtp/payload/parser';
-import {BaseClient} from '../../core/base_client';
-import {getTagged} from 'bp_logger';
-import {PayloadType} from '../../core/defs';
-import {base64ToArrayBuffer, hexToByteArray} from '../../core/util/binary';
-import {AACParser} from '../../core/parsers/aac';
+import RTPFactory from './rtp/factory.js';
+import {MessageBuilder} from './message.js';
+import {RTPPayloadParser} from './rtp/payload/parser.js';
+import {BaseClient} from '../../core/base_client.js';
+import {PayloadType} from '../../core/defs.js';
+import {base64ToArrayBuffer, hexToByteArray} from '../../core/util/binary.js';
+import {AACParser} from '../../core/parsers/aac.js';
 
 const LOG_TAG = "client:rtsp";
 const Log = getTagged(LOG_TAG);
@@ -21,9 +21,9 @@ export class RTPError {
 }
 
 export default class RTSPClient extends BaseClient {
-    constructor(transport, options={flush: 200}) {
-        super(transport, options);
-        this.clientSM = new RTSPClientSM(this, transport);
+    constructor(options={flush: 200}) {
+        super(options);
+        this.clientSM = new RTSPClientSM(this);
         this.clientSM.ontracks = (tracks) => {
             this.eventSource.dispatchEvent('tracks', tracks);
             this.startStreamFlush();
@@ -39,6 +39,20 @@ export default class RTSPClient extends BaseClient {
         super.setSource(url);
         this.clientSM.setSource(url);
     }
+    attachTransport(transport) {
+        super.attachTransport(transport);
+        this.clientSM.transport = transport;
+    }
+
+    detachTransport() {
+        super.detachTransport();
+        this.clientSM.transport = null;
+    }
+
+    reset() {
+        super.reset();
+        this.sampleQueues={};
+    }
 
     destroy() {
         this.clientSM.destroy();
@@ -47,9 +61,13 @@ export default class RTSPClient extends BaseClient {
 
     start() {
         super.start();
-        this.transport.ready.then(()=> {
-            this.clientSM.start();
-        });
+        if (this.transport) {
+            return this.transport.ready.then(() => {
+                return this.clientSM.start();
+            });
+        } else {
+            return Promise.reject("no transport attached");
+        }
     }
 
     onData(data) {
@@ -77,16 +95,14 @@ export class RTSPClientSM extends StateMachine {
     static get STATE_TEARDOWN() {return  1 << 5;}
     // static STATE_PAUSED = 1 << 6;
 
-    constructor(parent, transport) {
+    constructor(parent) {
         super();
 
         this.parent = parent;
-        this.transport = transport;
+        this.transport = null;
         this.payParser = new RTPPayloadParser();
         this.rtp_channels = new Set();
         this.ontracks = null;
-
-        this.reset();
 
         this.addState(RTSPClientSM.STATE_INITIAL,{
         }).addState(RTSPClientSM.STATE_OPTIONS, {
@@ -121,7 +137,7 @@ export class RTSPClientSM extends StateMachine {
             .addTransition(RTSPClientSM.STATE_DESCRIBE, RTSPClientSM.STATE_TEARDOWN)
             .addTransition(RTSPClientSM.STATE_OPTIONS, RTSPClientSM.STATE_TEARDOWN);
 
-        this.transitionTo(RTSPClientSM.STATE_INITIAL);
+        this.reset();
 
         this.shouldReconnect = false;
 
@@ -150,6 +166,7 @@ export class RTSPClientSM extends StateMachine {
     }
 
     setSource(url) {
+        this.reset();
         this.endpoint = url;
         this.url = url.urlpath;
     }
@@ -171,9 +188,10 @@ export class RTSPClientSM extends StateMachine {
 
     start() {
         if (this.state != RTSPClientSM.STATE_STREAMS) {
-            this.transitionTo(RTSPClientSM.STATE_OPTIONS);
+            return this.transitionTo(RTSPClientSM.STATE_OPTIONS);
         } else {
             // TODO: seekable
+            return Promise.resolve();
         }
     }
 
@@ -197,7 +215,7 @@ export class RTSPClientSM extends StateMachine {
         // this.mse = null;
     }
 
-    reset() {
+    async reset() {
         this.methods = [];
         this.tracks = [];
         for (let stream in this.streams) {
@@ -205,6 +223,14 @@ export class RTSPClientSM extends StateMachine {
         }
         this.streams={};
         this.contentBase = "";
+        if (this.currentState) {
+            if (this.currentState.name != RTSPClientSM.STATE_INITIAL) {
+                await this.transitionTo(RTSPClientSM.STATE_TEARDOWN);
+                await this.transitionTo(RTSPClientSM.STATE_INITIAL);
+            }
+        } else {
+            await this.transitionTo(RTSPClientSM.STATE_INITIAL);
+        }
         this.state = RTSPClientSM.STATE_INITIAL;
         this.sdp = null;
         this.interleaveChannelIndex = 0;
@@ -212,15 +238,14 @@ export class RTSPClientSM extends StateMachine {
         this.timeOffset = {};
     }
 
-    reconnect() {
+    async reconnect() {
         //this.parent.eventSource.dispatchEvent('clear');
-        this.reset();
+        await this.reset();
         if (this.currentState.name != RTSPClientSM.STATE_INITIAL) {
-            this.transitionTo(RTSPClientSM.STATE_TEARDOWN).then(()=> {
-                this.transitionTo(RTSPClientSM.STATE_OPTIONS);
-            });
+            await this.transitionTo(RTSPClientSM.STATE_TEARDOWN);
+            return this.transitionTo(RTSPClientSM.STATE_OPTIONS);
         } else {
-            this.transitionTo(RTSPClientSM.STATE_OPTIONS);
+            return this.transitionTo(RTSPClientSM.STATE_OPTIONS);
         }
     }
 
@@ -256,17 +281,21 @@ export class RTSPClientSM extends StateMachine {
     }
 
     send(_data) {
-        return this.transport.ready.then(()=> {
-            Log.debug(_data);
-            return this.transport.send(_data).then(this.parse.bind(this)).then((parsed)=> {
-                // TODO: parse status codes
-                if (parsed.code>=300) {
-                    Log.error(parsed.statusLine);
-                    throw new Error(`RTSP error: ${parsed.code} ${parsed.message}`);
-                }
-                return parsed;
-            });
-        }).catch(this.onDisconnected.bind(this));
+        if (this.transport) {
+            return this.transport.ready.then(() => {
+                Log.debug(_data);
+                return this.transport.send(_data).then(this.parse.bind(this)).then((parsed) => {
+                    // TODO: parse status codes
+                    if (parsed.code >= 300) {
+                        Log.error(parsed.statusLine);
+                        throw new Error(`RTSP error: ${parsed.code} ${parsed.message}`);
+                    }
+                    return parsed;
+                });
+            }).catch(this.onDisconnected.bind(this));
+        } else {
+            return Promise.reject("No transport attached");
+        }
     }
 
     sendOptions() {
@@ -393,7 +422,11 @@ export class RTSPClientSM extends StateMachine {
         if (rtp.media) {
             let pay = this.payParser.parse(rtp);
             if (pay) {
-                this.parent.sampleQueues[rtp.type].push([pay]);
+                // if (typeof pay == typeof []) {
+                this.parent.sampleQueues[rtp.type].push(pay);
+                // } else {
+                //     this.parent.sampleQueues[rtp.type].push([pay]);
+                // }
             }
         }
 
