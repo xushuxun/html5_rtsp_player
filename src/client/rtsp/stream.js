@@ -43,7 +43,8 @@ export class RTSPStream {
             /* Should probably check session level control before this */
             return `${this.client.contentBase}${track.control}`;
         }
-
+        else//need return default 
+            return track.control;
         Log.error('Can\'t determine track URL from ' +
             'block.control:' + track.control + ', ' +
             'session.control:' + sessionBlock.control + ', and ' +
