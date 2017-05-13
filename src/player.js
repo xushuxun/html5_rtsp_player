@@ -214,5 +214,21 @@ export class WSPlayer {
             this.client.stop();
         }
     }
+    
+    async destroy() {
+        if (this.transport) {
+            if (this.client) {
+                await this.client.detachTransport();
+            }
+            await this.transport.destroy();
+        }
+        if (this.client) {
+            await this.client.destroy();
+        }
+        if (this.remuxer) {
+            this.remuxer.destroy();
+            this.remuxer = null;
+        }
+    }
 
 }
