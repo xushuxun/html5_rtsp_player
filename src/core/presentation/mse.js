@@ -5,7 +5,7 @@ import {getTagged} from '../../deps/bp_logger.js';
 const LOG_TAG = "mse";
 const Log = getTagged(LOG_TAG);
 
-export class Buffer {
+export class MSEBuffer {
     constructor(parent, codec) {
         this.mediaSource = parent.mediaSource;
         this.players = parent.players;
@@ -350,7 +350,7 @@ export class MSE {
 
     setCodec(track, mimeCodec) {
         return this.mediaReady.then(()=>{
-            this.buffers[track] = new Buffer(this, mimeCodec);
+            this.buffers[track] = new MSEBuffer(this, mimeCodec);
             this.buffers[track].setLive(this.is_live);
         });
     }

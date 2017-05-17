@@ -58,24 +58,30 @@ function getTagged(tag) {
 }
 const Log = new Logger();
 
+// export * from 'bp_logger';
+
 class Url {
     static parse(url) {
-        var ret = {};
+        let ret = {};
 
-        var regex = /^([^:]+):\/\/([^\/]+)(.*)$/;  //protocol, login, urlpath
-        var result = regex.exec(url);
+        let regex = /^([^:]+):\/\/([^\/]+)(.*)$/;  //protocol, login, urlpath
+        let result = regex.exec(url);
+
+        if (!result) {
+            throw new Error("bad url");
+        }
 
         ret.full = url;
         ret.protocol = result[1];
         ret.urlpath = result[3];
 
-        var parts = ret.urlpath.split('/');
+        let parts = ret.urlpath.split('/');
         ret.basename = parts.pop().split(/\?|#/)[0];
         ret.basepath = parts.join('/');
 
-        var loginSplit = result[2].split('@');
-        var hostport = loginSplit[0].split(':');
-        var userpass = [ null, null ];
+        let loginSplit = result[2].split('@');
+        let hostport = loginSplit[0].split(':');
+        let userpass = [ null, null ];
         if (loginSplit.length === 2) {
             userpass = loginSplit[0].split(':');
             hostport = loginSplit[1].split(':');
@@ -116,6 +122,154 @@ class Url {
         return 0;
     }
 }
+
+const listener = Symbol("event_listener");
+const listeners = Symbol("event_listeners");
+
+class DestructibleEventListener {
+    constructor(eventListener) {
+        this[listener] = eventListener;
+        this[listeners] = new Map();
+    }
+
+    clear() {
+        if (this[listeners]) {
+            for (let entry of this[listeners]) {
+                for (let fn of entry[1]) {
+                    this[listener].removeEventListener(entry[0], fn);
+                }
+            }
+        }
+        this[listeners].clear();
+    }
+
+    destroy() {
+        this.clear();
+        this[listeners] = null;
+    }
+
+    on(event, selector, fn) {
+        if (fn == undefined) {
+            fn = selector;
+            selector = null;
+        }
+        if (selector) {
+            return this.addEventListener(event, (e) => {
+                if (e.target.matches(selector)) {
+                    fn(e);
+                }
+            });
+        } else {
+            return this.addEventListener(event, fn);
+        }
+    }
+
+    addEventListener(event, fn) {
+        if (!this[listeners].has(event)) {
+            this[listeners].set(event, new Set());
+        }
+        this[listeners].get(event).add(fn);
+        this[listener].addEventListener(event, fn, false);
+        return fn;
+    }
+
+    removeEventListener(event, fn) {
+        this[listener].removeEventListener(event, fn, false);
+        if (this[listeners].has(event)) {
+            //this[listeners].set(event, new Set());
+            let ev = this[listeners].get(event);
+            ev.delete(fn);
+            if (!ev.size) {
+                this[listeners].delete(event);
+            }
+        }
+    }
+
+    dispatchEvent(event) {
+        if (this[listener]) {
+            this[listener].dispatchEvent(event);
+        }
+    }
+}
+
+class EventEmitter {
+    constructor(element=null) {
+        this[listener] = new DestructibleEventListener(element || document.createElement('div'));
+    }
+
+    clear() {
+        if (this[listener]) {
+            this[listener].clear();
+        }
+    }
+
+    destroy() {
+        if (this[listener]) {
+            this[listener].destroy();
+            this[listener] = null;
+        }
+    }
+
+    on(event, selector, fn) {
+        if (this[listener]) {
+            return this[listener].on(event, selector, fn);
+        }
+        return null;
+    }
+
+    addEventListener(event, fn) {
+        if (this[listener]) {
+            return this[listener].addEventListener(event, fn, false);
+        }
+        return null;
+    }
+
+    removeEventListener(event, fn) {
+        if (this[listener]) {
+            this[listener].removeEventListener(event, fn, false);
+        }
+    }
+
+    dispatchEvent(event, data) {
+        if (this[listener]) {
+            this[listener].dispatchEvent(new CustomEvent(event, {detail: data}));
+        }
+    }
+}
+
+class EventSourceWrapper {
+    constructor(eventSource) {
+        this.eventSource = eventSource;
+        this[listeners] = new Map();
+    }
+
+    on(event, selector, fn) {
+        if (!this[listeners].has(event)) {
+            this[listeners].set(event, new Set());
+        }
+        let listener = this.eventSource.on(event, selector, fn);
+        if (listener) {
+            this[listeners].get(event).add(listener);
+        }
+    }
+
+    off(event, fn){
+        this.eventSource.removeEventListener(event, fn);
+    }
+
+    clear() {
+        this.eventSource.clear();
+        this[listeners].clear();
+    }
+
+    destroy() {
+        this.eventSource.clear();
+        this[listeners] = null;
+        this.eventSource = null;
+    }
+}
+
+// export * from 'bp_event';
 
 /**
  * Generate MP4 Box
@@ -727,315 +881,12 @@ class MP4 {
     }
 }
 
-class AACFrame {
-
-    constructor(data, dts, pts) {
-        this.dts = dts;
-        this.pts = pts ? pts : this.dts;
-
-        this.data=data;//.subarray(offset);
-    }
-
-    getData() {
-        return this.data;
-    }
-
-    getSize() {
-        return this.data.byteLength;
-    }
-}
-
-// TODO: asm.js
-
-function appendByteArray(buffer1, buffer2) {
-    let tmp = new Uint8Array((buffer1.byteLength|0) + (buffer2.byteLength|0));
-    tmp.set(buffer1, 0);
-    tmp.set(buffer2, buffer1.byteLength|0);
-    return tmp;
-}
-
-
-function base64ToArrayBuffer(base64) {
-    var binary_string =  window.atob(base64);
-    var len = binary_string.length;
-    var bytes = new Uint8Array( len );
-    for (var i = 0; i < len; i++)        {
-        bytes[i] = binary_string.charCodeAt(i);
-    }
-    return bytes.buffer;
-}
-
-function hexToByteArray(hex) {
-    let len = hex.length >> 1;
-    var bufView = new Uint8Array(len);
-    for (var i = 0; i < len; i++) {
-        bufView[i] = parseInt(hex.substr(i<<1,2),16);
-    }
-    return bufView;
-}
-
-
-
-function bitSlice(bytearray, start=0, end=bytearray.byteLength*8) {
-    let byteLen = Math.ceil((end-start)/8);
-    let res = new Uint8Array(byteLen);
-    let startByte = start >>> 3;   // /8
-    let endByte = (end>>>3) - 1;    // /8
-    let bitOffset = start & 0x7;     // %8
-    let nBitOffset = 8 - bitOffset;
-    let endOffset = 8 - end & 0x7;   // %8
-    for (let i=0; i<byteLen; ++i) {
-        let tail = 0;
-        if (i<endByte) {
-            tail = bytearray[startByte+i+1] >> nBitOffset;
-            if (i == endByte-1 && endOffset < 8) {
-                tail >>= endOffset;
-                tail <<= endOffset;
-            }
-        }
-        res[i]=(bytearray[startByte+i]<<bitOffset) | tail;
-    }
-    return res;
-}
-
-class BitArray {
-
-    constructor(src) {
-        this.src    = new DataView(src.buffer, src.byteOffset, src.byteLength);
-        this.bitpos = 0;
-        this.byte   = this.src.getUint8(0); /* This should really be undefined, uint wont allow it though */
-        this.bytepos = 0;
-    }
-
-    readBits(length) {
-        if (32 < (length|0) || 0 === (length|0)) {
-            /* To big for an uint */
-            throw new Error("too big");
-        }
-
-        let result = 0;
-        for (let i = length; i > 0; --i) {
-
-            /* Shift result one left to make room for another bit,
-             then add the next bit on the stream. */
-            result = ((result|0) << 1) | (((this.byte|0) >> (8 - (++this.bitpos))) & 0x01);
-            if ((this.bitpos|0)>=8) {
-                this.byte = this.src.getUint8(++this.bytepos);
-                this.bitpos &= 0x7;
-            }
-        }
-
-        return result;
-    }
-    skipBits(length) {
-        this.bitpos += (length|0) & 0x7; // %8
-        this.bytepos += (length|0) >>> 3;  // *8
-        if (this.bitpos > 7) {
-            this.bitpos &= 0x7;
-            ++this.bytepos;
-        }
-
-        if (!this.finished()) {
-            this.byte = this.src.getUint8(this.bytepos);
-            return 0;
-        } else {
-            return this.bytepos-this.src.byteLength-this.src.bitpos;
-        }
-    }
-    
-    finished() {
-        return this.bytepos >= this.src.byteLength;
-    }
-}
-
-class AACParser {
-    static get SampleRates() {return  [
-        96000, 88200,
-        64000, 48000,
-        44100, 32000,
-        24000, 22050,
-        16000, 12000,
-        11025, 8000,
-        7350];}
-
-    // static Profile = [
-    //     0: Null
-    //     1: AAC Main
-    //     2: AAC LC (Low Complexity)
-    //     3: AAC SSR (Scalable Sample Rate)
-    //     4: AAC LTP (Long Term Prediction)
-    //     5: SBR (Spectral Band Replication)
-    //     6: AAC Scalable
-    // ]
-
-    static parseAudioSpecificConfig(bytesOrBits) {
-        let config;
-        if (bytesOrBits.byteLength) { // is byteArray
-            config = new BitArray(bytesOrBits);
-        } else {
-            config = bytesOrBits;
-        }
-
-        let bitpos = config.bitpos+(config.src.byteOffset+config.bytepos)*8;
-        let prof = config.readBits(5);
-        this.codec = `mp4a.40.${prof}`;
-        let sfi = config.readBits(4);
-        if (sfi == 0xf) config.skipBits(24);
-        let channels = config.readBits(4);
-
-        return {
-            config: bitSlice(new Uint8Array(config.src.buffer), bitpos, bitpos+16),
-            codec: `mp4a.40.${prof}`,
-            samplerate: AACParser.SampleRates[sfi],
-            channels: channels
-        }
-    }
-
-    static parseStreamMuxConfig(bytes) {
-        // ISO_IEC_14496-3 Part 3 Audio. StreamMuxConfig
-        let config = new BitArray(bytes);
-
-        if (!config.readBits(1)) {
-            config.skipBits(14);
-            return AACParser.parseAudioSpecificConfig(config);
-        }
-    }
-}
-
-// TODO: asm.js
-class AACAsm {
-    constructor() {
-        this.config = null;
-    }
-
-    onAACFragment(pkt) {
-        let rawData = pkt.getPayload();
-        if (!pkt.media) {
-            return null;
-        }
-        let data = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
-
-        let sizeLength = Number(pkt.media.fmtp['sizelength'] || 0);
-        let indexLength = Number(pkt.media.fmtp['indexlength'] || 0);
-        let indexDeltaLength = Number(pkt.media.fmtp['indexdeltalength'] || 0);
-        let CTSDeltaLength = Number(pkt.media.fmtp['ctsdeltalength'] || 0);
-        let DTSDeltaLength = Number(pkt.media.fmtp['dtsdeltalength'] || 0);
-        let RandomAccessIndication = Number(pkt.media.fmtp['randomaccessindication'] || 0);
-        let StreamStateIndication = Number(pkt.media.fmtp['streamstateindication'] || 0);
-        let AuxiliaryDataSizeLength = Number(pkt.media.fmtp['auxiliarydatasizelength'] || 0);
-
-        let configHeaderLength =
-            sizeLength + Math.max(indexLength, indexDeltaLength) + CTSDeltaLength + DTSDeltaLength +
-            RandomAccessIndication + StreamStateIndication + AuxiliaryDataSizeLength;
-
-
-        let auHeadersLengthPadded = 0;
-        if (0 !== configHeaderLength) {
-            /* The AU header section is not empty, read it from payload */
-            let auHeadersLengthInBits = data.getUint16(0); // Always 2 octets, without padding
-            auHeadersLengthPadded = 2 + ((auHeadersLengthInBits + (auHeadersLengthInBits & 0x7)) >>> 3); // Add padding
-
-            //this.config = AACParser.parseAudioSpecificConfig(new Uint8Array(rawData, 0 , auHeadersLengthPadded));
-            // TODO: parse config
-        }
-
-        let aacData = rawData.subarray(auHeadersLengthPadded);
-        let offset = 0;
-        while (true) {
-            if (aacData[offset] !=255) break;
-            ++offset;
-        }
-
-        ++offset;
-        let ts = (Math.round(pkt.getTimestampMS()/1024) << 10) * 90000 / this.config.samplerate;
-        return new AACFrame(rawData.subarray(auHeadersLengthPadded+offset), ts);
-    }
-}
-
-const listener = Symbol("event_listener");
-const listeners = Symbol("event_listeners");
-
-class DestructibleEventListener {
-    constructor(eventListener) {
-        this[listener] = eventListener;
-        this[listeners] = new Map();
-    }
-
-    destroy() {
-        this[listeners].forEach((listener_set, event)=>{
-            listener_set.forEach((fn)=>{
-                this[listener].removeEventListener(event, fn);
-            });
-            listener_set = null;
-        });
-        this[listeners] = null;
-    }
-
-    addEventListener(event, fn) {
-        if (!this[listeners].has(event)) {
-            this[listeners].set(event, new Set());
-        }
-        this[listeners].get(event).add(fn);
-        this[listener].addEventListener(event, fn, false);
-    }
-
-    removeEventListener(event, fn) {
-        this[listener].removeEventListener(event, fn, false);
-        if (this[listeners].has(event)) {
-            this[listeners].set(event, new Set());
-            let ev = this[listeners].get(event);
-            ev.delete(fn);
-            if (!ev.size) {
-                this[listeners].delete(event);
-            }
-        }
-    }
-
-    dispatchEvent(event) {
-        this[listener].dispatchEvent(event);
-    }
-}
-
-class EventEmitter {
-    constructor() {
-        this[listener] = new DestructibleEventListener(document.createElement('div'));
-    }
-
-    destroy() {
-        this[listener].destroy();
-        this[listener] = null;
-    }
-
-    addEventListener(event, fn) {
-        this[listener].addEventListener(event, fn, false);
-    }
-
-    removeEventListener(event, fn) {
-        this[listener].removeEventListener(event, fn, false);
-    }
-
-    dispatchEvent(event, data) {
-        this[listener].dispatchEvent(new CustomEvent(event, {detail: data}));
-    }
-}
-
-var DataView$1 = window.DataView;
-var parseSampleFlags = function(flags) {
-    return {
-      isLeading: (flags[0] & 0x0c) >>> 2,
-      dependsOn: flags[0] & 0x03,
-      isDependedOn: (flags[1] & 0xc0) >>> 6,
-      hasRedundancy: (flags[1] & 0x30) >>> 4,
-      paddingValue: (flags[1] & 0x0e) >>> 1,
-      isNonSyncSample: flags[1] & 0x01,
-      degradationPriority: (flags[2] << 8) | flags[3]
-    };
-  };
+//import {MP4Inspect} from '../iso-bmff/mp4-inspector.js';
 
 const LOG_TAG$1 = "mse";
 const Log$4 = getTagged(LOG_TAG$1);
 
-class Buffer {
+class MSEBuffer {
     constructor(parent, codec) {
         this.mediaSource = parent.mediaSource;
         this.players = parent.players;
@@ -1049,8 +900,9 @@ class Buffer {
         Log$4.debug(`Use codec: ${codec}`);
 
         this.sourceBuffer = this.mediaSource.addSourceBuffer(codec);
+        this.eventSource = new EventEmitter(this.sourceBuffer);
 
-        this.sourceBuffer.addEventListener('updatestart', (e)=> {
+        this.eventSource.addEventListener('updatestart', (e)=> {
             // this.updating = true;
             // Log.debug('update start');
             if (this.cleaning) {
@@ -1058,14 +910,14 @@ class Buffer {
             }
         });
 
-        this.sourceBuffer.addEventListener('update', (e)=> {
+        this.eventSource.addEventListener('update', (e)=> {
             // this.updating = true;
             if (this.cleaning) {
                 Log$4.debug(`${this.codec} cleaning update`);
             }
         });
 
-        this.sourceBuffer.addEventListener('updateend', (e)=> {
+        this.eventSource.addEventListener('updateend', (e)=> {
             // Log.debug('update end');
             // this.updating = false;
             if (this.cleaning) {
@@ -1094,7 +946,7 @@ class Buffer {
             this.feedNext();
         });
 
-        this.sourceBuffer.addEventListener('error', (e)=> {
+        this.eventSource.addEventListener('error', (e)=> {
             Log$4.debug(`Source buffer error: ${this.mediaSource.readyState}`);
             if (this.mediaSource.sourceBuffers.length) {
                 this.mediaSource.removeSourceBuffer(this.sourceBuffer);
@@ -1102,7 +954,7 @@ class Buffer {
             this.parent.eventSource.dispatchEvent('error');
         });
 
-        this.sourceBuffer.addEventListener('abort', (e)=> {
+        this.eventSource.addEventListener('abort', (e)=> {
             Log$4.debug(`Source buffer aborted: ${this.mediaSource.readyState}`);
             if (this.mediaSource.sourceBuffers.length) {
                 this.mediaSource.removeSourceBuffer(this.sourceBuffer);
@@ -1117,6 +969,7 @@ class Buffer {
     }
 
     destroy() {
+        this.eventSource.destroy();
         this.clear();
         this.queue = [];
         this.mediaSource.removeSourceBuffer(this.sourceBuffer);
@@ -1283,14 +1136,16 @@ class MSE {
 
     constructor (players) {
         this.players = players;
-        this.eventSource = new EventEmitter();
         this.mediaSource = new MediaSource();
+        this.eventSource = new EventEmitter(this.mediaSource);
         this.reset();
     }
 
     destroy() {
-        this.clear();
+        this.reset();
         this.eventSource.destroy();
+        this.mediaSource = null;
+        this.eventSource = null;
     }
 
     play() {
@@ -1323,23 +1178,14 @@ class MSE {
     }
 
     clear() {
-        for (let track in this.buffers) {
-            this.buffers[track].destroy();
-            delete this.buffers[track];
-        }
-        if (this.mediaSource.readyState == 'open') {
-            this.mediaSource.duration = 0;
-            this.mediaSource.endOfStream();
-        }
+        this.reset();
         this.players.forEach((video)=>{video.src = URL.createObjectURL(this.mediaSource);});
 
         return this.setupEvents();
     }
 
     setupEvents() {
-        if (this._sourceOpen) this.mediaSource.removeEventListener('sourceopen', this._sourceOpen);
-        if (this._sourceEnded) this.mediaSource.removeEventListener('sourceended', this._sourceEnded);
-        if (this._sourceClose) this.mediaSource.removeEventListener('sourceclose', this._sourceClose);
+        this.eventSource.clear();
         this.resolved = false;
         this.mediaReady = new Promise((resolve, reject)=> {
             this._sourceOpen = ()=> {
@@ -1355,17 +1201,25 @@ class MSE {
             this._sourceClose = ()=>{
                 Log$4.debug(`Media source closed: ${this.mediaSource.readyState}`);
                 if (this.resolved) {
-                    this.eventSource.dispatchEvent('sourceclose');
+                    this.eventSource.dispatchEvent('sourceclosed');
                 }
             };
-            this.mediaSource.addEventListener('sourceopen', this._sourceOpen);
-            this.mediaSource.addEventListener('sourceended', this._sourceEnded);
-            this.mediaSource.addEventListener('sourceclose', this._sourceClose);
+            this.eventSource.addEventListener('sourceopen', this._sourceOpen);
+            this.eventSource.addEventListener('sourceended', this._sourceEnded);
+            this.eventSource.addEventListener('sourceclose', this._sourceClose);
         });
         return this.mediaReady;
     }
 
     reset() {
+        for (let track in this.buffers) {
+            this.buffers[track].destroy();
+            delete this.buffers[track];
+        }
+        if (this.mediaSource.readyState == 'open') {
+            this.mediaSource.duration = 0;
+            this.mediaSource.endOfStream();
+        }
         this.updating = false;
         this.resolved = false;
         this.buffers = {};
@@ -1377,7 +1231,7 @@ class MSE {
 
     setCodec(track, mimeCodec) {
         return this.mediaReady.then(()=>{
-            this.buffers[track] = new Buffer(this, mimeCodec);
+            this.buffers[track] = new MSEBuffer(this, mimeCodec);
             this.buffers[track].setLive(this.is_live);
         });
     }
@@ -1654,137 +1508,6 @@ class AACRemuxer extends BaseRemuxer {
 }
 //test.bundle.js:42 [remuxer:h264] skip frame from the past at DTS=18397972271140676 with expected DTS=18397998040950484
 
-class NALU {
-
-    static get NDR() {return 1;}
-    static get IDR() {return 5;}
-    static get SEI() {return 6;}
-    static get SPS() {return 7;}
-    static get PPS() {return 8;}
-
-    static get TYPES() {return {
-        [NALU.IDR]: 'IDR',
-        [NALU.SEI]: 'SEI',
-        [NALU.SPS]: 'SPS',
-        [NALU.PPS]: 'PPS',
-        [NALU.NDR]: 'NDR'
-    }};
-
-    static type(nalu) {
-        if (nalu.ntype in NALU.TYPES) {
-            return NALU.TYPES[nalu.ntype];
-        } else {
-            return 'UNKNOWN';
-        }
-    }
-
-    constructor(ntype, nri, data, dts, pts) {
-
-        this.data = data;
-        this.ntype = ntype;
-        this.nri = nri;
-        this.dts = dts;
-        this.pts = pts ? pts : this.dts;
-
-    }
-
-    appendData(idata) {
-        this.data = appendByteArray(this.data, idata);
-    }
-
-    type() {
-        return this.ntype;
-    }
-
-    isKeyframe() {
-        return this.ntype == NALU.IDR;
-    }
-
-    getSize() {
-        return 4 + 1 + this.data.byteLength;
-    }
-
-    getData() {
-        let header = new Uint8Array(5 + this.data.byteLength);
-        let view = new DataView(header.buffer);
-        view.setUint32(0, this.data.byteLength + 1);
-        view.setUint8(4, (0x0 & 0x80) | (this.nri & 0x60) | (this.ntype & 0x1F));
-        header.set(this.data, 5);
-        return header;
-    }
-}
-
-// TODO: asm.js
-class NALUAsm {
-    static get NALTYPE_FU_A() {return 28;}
-    static get NALTYPE_FU_B() {return 29;}
-
-    constructor() {
-        this.nalu = null;
-    }
-
-    onNALUFragment(rawData, dts, pts) {
-
-        var data = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
-
-        var nalhdr = data.getUint8(0);
-
-        var nri = nalhdr & 0x60;
-        var naltype = nalhdr & 0x1F;
-        var nal_start_idx = 1;
-
-        if (27 >= naltype && 0 < naltype) {
-            /* This RTP package is a single NALU, dispatch and forget, 0 is undefined */
-            return new NALU(naltype, nri, rawData.subarray(nal_start_idx), dts, pts);
-            //return;
-        }
-
-        if (NALUAsm.NALTYPE_FU_A !== naltype && NALUAsm.NALTYPE_FU_B !== naltype) {
-            /* 30 - 31 is undefined, ignore those (RFC3984). */
-            Log.log('Undefined NAL unit, type: ' + naltype);
-            return null;
-        }
-        nal_start_idx++;
-
-        var nalfrag = data.getUint8(1);
-        var nfstart = (nalfrag & 0x80) >>> 7;
-        var nfend = (nalfrag & 0x40) >>> 6;
-        var nftype = nalfrag & 0x1F;
-
-        var nfdon = 0;
-        if (NALUAsm.NALTYPE_FU_B === naltype) {
-            nfdon = data.getUint16(2);
-            nal_start_idx+=2;
-        }
-
-        if (null === this.nalu || nfstart) {
-            if (!nfstart) {
-                console.log('broken chunk (continuation of lost frame)');
-                return null;
-            }  // Ignore broken chunks
-
-            /* Create a new NAL unit from multiple fragmented NAL units */
-            this.nalu = new NALU(nftype, nri, rawData.subarray(nal_start_idx), dts, pts);
-        } else {
-            if (this.nalu.dts != dts) {
-                // debugger;
-                // Frames lost
-                console.log('broken chunk (continuation of frame with other timestamp)');
-                this.nalu = null;
-                return null;
-            }
-            /* We've already created the NAL unit, append current data */
-            this.nalu.appendData(rawData.subarray(nal_start_idx));
-        }
-
-        if (1 === nfend) {
-            let ret = this.nalu;
-            this.nalu = null;
-            return ret;
-        }
-    }
-}
-
 /**
  * Parser for exponential Golomb codes, a variable-bitwidth number encoding scheme used by h264.
 */
@@ -1918,6 +1641,169 @@ class ExpGolomb {
   readUInt() {
     return this.readBits(32);
   }  
+}
+
+// TODO: asm.js
+
+function appendByteArray(buffer1, buffer2) {
+    let tmp = new Uint8Array((buffer1.byteLength|0) + (buffer2.byteLength|0));
+    tmp.set(buffer1, 0);
+    tmp.set(buffer2, buffer1.byteLength|0);
+    return tmp;
+}
+
+
+function base64ToArrayBuffer(base64) {
+    var binary_string =  window.atob(base64);
+    var len = binary_string.length;
+    var bytes = new Uint8Array( len );
+    for (var i = 0; i < len; i++)        {
+        bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
+
+function hexToByteArray(hex) {
+    let len = hex.length >> 1;
+    var bufView = new Uint8Array(len);
+    for (var i = 0; i < len; i++) {
+        bufView[i] = parseInt(hex.substr(i<<1,2),16);
+    }
+    return bufView;
+}
+
+
+
+function bitSlice(bytearray, start=0, end=bytearray.byteLength*8) {
+    let byteLen = Math.ceil((end-start)/8);
+    let res = new Uint8Array(byteLen);
+    let startByte = start >>> 3;   // /8
+    let endByte = (end>>>3) - 1;    // /8
+    let bitOffset = start & 0x7;     // %8
+    let nBitOffset = 8 - bitOffset;
+    let endOffset = 8 - end & 0x7;   // %8
+    for (let i=0; i<byteLen; ++i) {
+        let tail = 0;
+        if (i<endByte) {
+            tail = bytearray[startByte+i+1] >> nBitOffset;
+            if (i == endByte-1 && endOffset < 8) {
+                tail >>= endOffset;
+                tail <<= endOffset;
+            }
+        }
+        res[i]=(bytearray[startByte+i]<<bitOffset) | tail;
+    }
+    return res;
+}
+
+class BitArray {
+
+    constructor(src) {
+        this.src    = new DataView(src.buffer, src.byteOffset, src.byteLength);
+        this.bitpos = 0;
+        this.byte   = this.src.getUint8(0); /* This should really be undefined, uint wont allow it though */
+        this.bytepos = 0;
+    }
+
+    readBits(length) {
+        if (32 < (length|0) || 0 === (length|0)) {
+            /* To big for an uint */
+            throw new Error("too big");
+        }
+
+        let result = 0;
+        for (let i = length; i > 0; --i) {
+
+            /* Shift result one left to make room for another bit,
+             then add the next bit on the stream. */
+            result = ((result|0) << 1) | (((this.byte|0) >> (8 - (++this.bitpos))) & 0x01);
+            if ((this.bitpos|0)>=8) {
+                this.byte = this.src.getUint8(++this.bytepos);
+                this.bitpos &= 0x7;
+            }
+        }
+
+        return result;
+    }
+    skipBits(length) {
+        this.bitpos += (length|0) & 0x7; // %8
+        this.bytepos += (length|0) >>> 3;  // *8
+        if (this.bitpos > 7) {
+            this.bitpos &= 0x7;
+            ++this.bytepos;
+        }
+
+        if (!this.finished()) {
+            this.byte = this.src.getUint8(this.bytepos);
+            return 0;
+        } else {
+            return this.bytepos-this.src.byteLength-this.src.bitpos;
+        }
+    }
+    
+    finished() {
+        return this.bytepos >= this.src.byteLength;
+    }
+}
+
+class NALU {
+
+    static get NDR() {return 1;}
+    static get IDR() {return 5;}
+    static get SEI() {return 6;}
+    static get SPS() {return 7;}
+    static get PPS() {return 8;}
+
+    static get TYPES() {return {
+        [NALU.IDR]: 'IDR',
+        [NALU.SEI]: 'SEI',
+        [NALU.SPS]: 'SPS',
+        [NALU.PPS]: 'PPS',
+        [NALU.NDR]: 'NDR'
+    }};
+
+    static type(nalu) {
+        if (nalu.ntype in NALU.TYPES) {
+            return NALU.TYPES[nalu.ntype];
+        } else {
+            return 'UNKNOWN';
+        }
+    }
+
+    constructor(ntype, nri, data, dts, pts) {
+
+        this.data = data;
+        this.ntype = ntype;
+        this.nri = nri;
+        this.dts = dts;
+        this.pts = pts ? pts : this.dts;
+
+    }
+
+    appendData(idata) {
+        this.data = appendByteArray(this.data, idata);
+    }
+
+    type() {
+        return this.ntype;
+    }
+
+    isKeyframe() {
+        return this.ntype == NALU.IDR;
+    }
+
+    getSize() {
+        return 4 + 1 + this.data.byteLength;
+    }
+
+    getData() {
+        let header = new Uint8Array(5 + this.data.byteLength);
+        let view = new DataView(header.buffer);
+        view.setUint32(0, this.data.byteLength + 1);
+        view.setUint8(4, (0x0 & 0x80) | (this.nri & 0x60) | (this.ntype & 0x1F));
+        header.set(this.data, 5);
+        return header;
+    }
 }
 
 class H264Parser {
@@ -2399,17 +2285,16 @@ class Remuxer {
     constructor(mediaElement) {
         this.mse = new MSE([mediaElement]);
         this.eventSource = new EventEmitter();
+        this.mseEventSource = new EventSourceWrapper(this.mse.eventSource);
         this.mse_ready = true;
 
         this.reset();
 
         this.errorListener = this.mseClose.bind(this);
         this.closeListener = this.mseClose.bind(this);
-        this.samplesListener = this.onSamples.bind(this);
-        this.audioConfigListener = this.onAudioConfig.bind(this);
 
-        this.mse.eventSource.addEventListener('error', this.errorListener);
-        this.mse.eventSource.addEventListener('sourceclose', this.closeListener);
+        this.mseEventSource.on('error', this.errorListener);
+        this.mseEventSource.on('sourceclosed', this.closeListener);
         
         this.eventSource.addEventListener('ready', this.init.bind(this));
     }
@@ -2421,9 +2306,11 @@ class Remuxer {
         this.codecs = [];
         this.streams = {};
         this.enabled = false;
+        this.mse.clear();
     }
 
     destroy() {
+        this.mseEventSource.destroy();
         this.mse.destroy();
         this.mse = null;
 
@@ -2554,11 +2441,12 @@ class Remuxer {
     attachClient(client) {
         this.detachClient();
         this.client = client;
-        this.client.eventSource.addEventListener('samples', this.samplesListener);
-        this.client.eventSource.addEventListener('audio_config', this.audioConfigListener);
-        this.client.eventSource.addEventListener('tracks', this.onTracks.bind(this));
-        this.client.eventSource.addEventListener('flush', this.flush.bind(this));
-        this.client.eventSource.addEventListener('clear', ()=>{
+        this.clientEventSource = new EventSourceWrapper(this.client.eventSource);
+        this.clientEventSource.on('samples', this.samplesListener);
+        this.clientEventSource.on('audio_config', this.audioConfigListener);
+        this.clientEventSource.on('tracks', this.onTracks.bind(this));
+        this.clientEventSource.on('flush', this.flush.bind(this));
+        this.clientEventSource.on('clear', ()=>{
             this.reset();
             this.mse.clear().then(()=>{
                 this.mse.play();
@@ -2568,10 +2456,13 @@ class Remuxer {
 
     detachClient() {
         if (this.client) {
-            this.client.eventSource.removeEventListener('samples', this.samplesListener);
-            this.client.eventSource.removeEventListener('audio_config', this.audioConfigListener);
-            // TODO: clear other listeners
-            // this.client.eventSource.removeEventListener('clear');
+            this.clientEventSource.destroy();
+            // this.client.eventSource.removeEventListener('samples', this.onSamples.bind(this));
+            // this.client.eventSource.removeEventListener('audio_config', this.onAudioConfig.bind(this));
+            // // TODO: clear other listeners
+            // this.client.eventSource.removeEventListener('clear', this._clearListener);
+            // this.client.eventSource.removeEventListener('tracks', this._tracksListener);
+            // this.client.eventSource.removeEventListener('flush', this._flushListener);
             this.client = null;
         }
     }
@@ -2590,6 +2481,8 @@ class State {
     }
 
     finishTransition() {}
+
+    failHandler() {}
 
     deactivate() {
         return Promise.resolve(null);
@@ -2643,7 +2536,10 @@ class StateMachine {
                 .then((data)=> {
                     this.currentState = state;
                     return data;
-                }).then(state.finishTransition.bind(this));
+                }).then(state.finishTransition.bind(this)).catch((e)=>{
+                    state.failHandler();
+                    throw e;
+                });
         }
         if (this.currentState.name == stateName) return Promise.resolve();
         if (this.currentState.transitions.has(stateName)) {
@@ -2652,13 +2548,18 @@ class StateMachine {
                 .then(state.activate.bind(this)).then((data)=> {
                     this.currentState = state;
                     return data;
-                }).then(state.finishTransition.bind(this));
+                }).then(state.finishTransition.bind(this)).catch((e)=>{
+                    state.failHandler();
+                    throw e;
+                });
         } else {
             return Promise.reject(`No such transition: ${this.currentState.name} to ${stateName}`);
         }
     }
 
 }
+
+// export * from 'bp_statemachine';
 
 const Log$8 = getTagged("parser:sdp");
 
@@ -2971,7 +2872,7 @@ class RTSPStream {
     }
 
     getSetupURL(track) {
-        var sessionBlock = this.client.sdp.getSessionBlock();
+        let sessionBlock = this.client.sdp.getSessionBlock();
         if (Url.isAbsolute(track.control)) {
             return track.control;
         } else if (Url.isAbsolute(`${sessionBlock.control}${track.control}`)) {
@@ -2980,7 +2881,9 @@ class RTSPStream {
             /* Should probably check session level control before this */
             return `${this.client.contentBase}${track.control}`;
         }
-
+        else {//need return default
+            return track.control;
+        }
         Log$9.error('Can\'t determine track URL from ' +
             'block.control:' + track.control + ', ' +
             'session.control:' + sessionBlock.control + ', and ' +
@@ -3009,15 +2912,15 @@ class RTSPStream {
     }
 
     startKeepAlive() {
-        this.keepaliveInterval = setInterval(()=>{
-            this.sendKeepalive().catch((e)=>{
+        this.keepaliveInterval = setInterval(() => {
+            this.sendKeepalive().catch((e) => {
                 Log$9.error(e);
                 this.client.reconnect();
             });
         }, 30000);
     }
 
-    sendRequest(_cmd, _params={}) {
+    sendRequest(_cmd, _params = {}) {
         let params = {};
         if (this.session) {
             params['Session'] = this.session;
@@ -3033,7 +2936,7 @@ class RTSPStream {
         return this.client.sendRequest('SETUP', this.getSetupURL(this.track), {
             'Transport': `RTP/AVP/TCP;unicast;interleaved=${interleavedChannels}`,
             'Date': new Date().toUTCString()
-        }).then((_data)=>{
+        }).then((_data) => {
             this.session = _data.headers['session'];
             /*if (!/RTP\/AVP\/TCP;unicast;interleaved=/.test(_data.headers["transport"])) {
                 // TODO: disconnect stream and notify client
@@ -3043,21 +2946,21 @@ class RTSPStream {
         });
     }
 
-    sendPlay(pos=0) {
+    sendPlay(pos = 0) {
         this.state = RTSPStream.STATE_PLAY;
         let params = {};
         let range = this.client.sdp.sessionBlock.range;
         if (range) {
             // TODO: seekable
-            if (range[0]==-1) {
-                range[0]=0;// Do not handle now at the moment
+            if (range[0] == -1) {
+                range[0] = 0;// Do not handle now at the moment
             }
             // params['Range'] = `${range[2]}=${range[0]}-`;
         }
-        return this.sendRequest('PLAY', params).then((_data)=>{
+        return this.sendRequest('PLAY', params).then((_data) => {
             this.client.useRTPChannel(this.rtpChannel);
             this.state = RTSPClientSM.STATE_PLAYING;
-            return {track:this.track, data: _data};
+            return {track: this.track, data: _data};
         });
     }
 
@@ -3066,7 +2969,7 @@ class RTSPStream {
             return;
         }
         this.state = RTSPClientSM.STATE_PAUSE;
-        return this.sendRequest("PAUSE").then((_data)=>{
+        return this.sendRequest("PAUSE").then((_data) => {
             this.state = RTSPClientSM.STATE_PAUSED;
         });
     }
@@ -3076,13 +2979,280 @@ class RTSPStream {
             this.client.forgetRTPChannel(this.rtpChannel);
             this.state = RTSPClientSM.STATE_TEARDOWN;
             this.stopKeepAlive();
-            return this.sendRequest("TEARDOWN").then(()=> {
+            return this.sendRequest("TEARDOWN").then(() => {
                 Log$9.log('RTSPClient: STATE_TEARDOWN');
                 ///this.client.connection.disconnect();
                 // TODO: Notify client
             });
         }
     }
+}
+
+/*
+ * JavaScript MD5
+ * https://github.com/blueimp/JavaScript-MD5
+ *
+ * Copyright 2011, Sebastian Tschan
+ * https://blueimp.net
+ *
+ * Licensed under the MIT license:
+ * https://opensource.org/licenses/MIT
+ *
+ * Based on
+ * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
+ * Digest Algorithm, as defined in RFC 1321.
+ * Version 2.2 Copyright (C) Paul Johnston 1999 - 2009
+ * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
+ * Distributed under the BSD License
+ * See http://pajhome.org.uk/crypt/md5 for more info.
+ */
+
+
+/*
+* Add integers, wrapping at 2^32. This uses 16-bit operations internally
+* to work around bugs in some JS interpreters.
+*/
+function safeAdd(x, y) {
+    var lsw = (x & 0xFFFF) + (y & 0xFFFF);
+    var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+    return (msw << 16) | (lsw & 0xFFFF)
+}
+
+/*
+* Bitwise rotate a 32-bit number to the left.
+*/
+function bitRotateLeft(num, cnt) {
+    return (num << cnt) | (num >>> (32 - cnt))
+}
+
+/*
+* These functions implement the four basic operations the algorithm uses.
+*/
+function md5cmn(q, a, b, x, s, t) {
+    return safeAdd(bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s), b)
+}
+function md5ff(a, b, c, d, x, s, t) {
+    return md5cmn((b & c) | ((~b) & d), a, b, x, s, t)
+}
+function md5gg(a, b, c, d, x, s, t) {
+    return md5cmn((b & d) | (c & (~d)), a, b, x, s, t)
+}
+function md5hh(a, b, c, d, x, s, t) {
+    return md5cmn(b ^ c ^ d, a, b, x, s, t)
+}
+function md5ii(a, b, c, d, x, s, t) {
+    return md5cmn(c ^ (b | (~d)), a, b, x, s, t)
+}
+
+/*
+* Calculate the MD5 of an array of little-endian words, and a bit length.
+*/
+function binlMD5(x, len) {
+    /* append padding */
+    x[len >> 5] |= 0x80 << (len % 32);
+    x[(((len + 64) >>> 9) << 4) + 14] = len;
+
+    var i;
+    var olda;
+    var oldb;
+    var oldc;
+    var oldd;
+    var a = 1732584193;
+    var b = -271733879;
+    var c = -1732584194;
+    var d = 271733878;
+
+    for (i = 0; i < x.length; i += 16) {
+        olda = a;
+        oldb = b;
+        oldc = c;
+        oldd = d;
+
+        a = md5ff(a, b, c, d, x[i], 7, -680876936);
+        d = md5ff(d, a, b, c, x[i + 1], 12, -389564586);
+        c = md5ff(c, d, a, b, x[i + 2], 17, 606105819);
+        b = md5ff(b, c, d, a, x[i + 3], 22, -1044525330);
+        a = md5ff(a, b, c, d, x[i + 4], 7, -176418897);
+        d = md5ff(d, a, b, c, x[i + 5], 12, 1200080426);
+        c = md5ff(c, d, a, b, x[i + 6], 17, -1473231341);
+        b = md5ff(b, c, d, a, x[i + 7], 22, -45705983);
+        a = md5ff(a, b, c, d, x[i + 8], 7, 1770035416);
+        d = md5ff(d, a, b, c, x[i + 9], 12, -1958414417);
+        c = md5ff(c, d, a, b, x[i + 10], 17, -42063);
+        b = md5ff(b, c, d, a, x[i + 11], 22, -1990404162);
+        a = md5ff(a, b, c, d, x[i + 12], 7, 1804603682);
+        d = md5ff(d, a, b, c, x[i + 13], 12, -40341101);
+        c = md5ff(c, d, a, b, x[i + 14], 17, -1502002290);
+        b = md5ff(b, c, d, a, x[i + 15], 22, 1236535329);
+
+        a = md5gg(a, b, c, d, x[i + 1], 5, -165796510);
+        d = md5gg(d, a, b, c, x[i + 6], 9, -1069501632);
+        c = md5gg(c, d, a, b, x[i + 11], 14, 643717713);
+        b = md5gg(b, c, d, a, x[i], 20, -373897302);
+        a = md5gg(a, b, c, d, x[i + 5], 5, -701558691);
+        d = md5gg(d, a, b, c, x[i + 10], 9, 38016083);
+        c = md5gg(c, d, a, b, x[i + 15], 14, -660478335);
+        b = md5gg(b, c, d, a, x[i + 4], 20, -405537848);
+        a = md5gg(a, b, c, d, x[i + 9], 5, 568446438);
+        d = md5gg(d, a, b, c, x[i + 14], 9, -1019803690);
+        c = md5gg(c, d, a, b, x[i + 3], 14, -187363961);
+        b = md5gg(b, c, d, a, x[i + 8], 20, 1163531501);
+        a = md5gg(a, b, c, d, x[i + 13], 5, -1444681467);
+        d = md5gg(d, a, b, c, x[i + 2], 9, -51403784);
+        c = md5gg(c, d, a, b, x[i + 7], 14, 1735328473);
+        b = md5gg(b, c, d, a, x[i + 12], 20, -1926607734);
+
+        a = md5hh(a, b, c, d, x[i + 5], 4, -378558);
+        d = md5hh(d, a, b, c, x[i + 8], 11, -2022574463);
+        c = md5hh(c, d, a, b, x[i + 11], 16, 1839030562);
+        b = md5hh(b, c, d, a, x[i + 14], 23, -35309556);
+        a = md5hh(a, b, c, d, x[i + 1], 4, -1530992060);
+        d = md5hh(d, a, b, c, x[i + 4], 11, 1272893353);
+        c = md5hh(c, d, a, b, x[i + 7], 16, -155497632);
+        b = md5hh(b, c, d, a, x[i + 10], 23, -1094730640);
+        a = md5hh(a, b, c, d, x[i + 13], 4, 681279174);
+        d = md5hh(d, a, b, c, x[i], 11, -358537222);
+        c = md5hh(c, d, a, b, x[i + 3], 16, -722521979);
+        b = md5hh(b, c, d, a, x[i + 6], 23, 76029189);
+        a = md5hh(a, b, c, d, x[i + 9], 4, -640364487);
+        d = md5hh(d, a, b, c, x[i + 12], 11, -421815835);
+        c = md5hh(c, d, a, b, x[i + 15], 16, 530742520);
+        b = md5hh(b, c, d, a, x[i + 2], 23, -995338651);
+
+        a = md5ii(a, b, c, d, x[i], 6, -198630844);
+        d = md5ii(d, a, b, c, x[i + 7], 10, 1126891415);
+        c = md5ii(c, d, a, b, x[i + 14], 15, -1416354905);
+        b = md5ii(b, c, d, a, x[i + 5], 21, -57434055);
+        a = md5ii(a, b, c, d, x[i + 12], 6, 1700485571);
+        d = md5ii(d, a, b, c, x[i + 3], 10, -1894986606);
+        c = md5ii(c, d, a, b, x[i + 10], 15, -1051523);
+        b = md5ii(b, c, d, a, x[i + 1], 21, -2054922799);
+        a = md5ii(a, b, c, d, x[i + 8], 6, 1873313359);
+        d = md5ii(d, a, b, c, x[i + 15], 10, -30611744);
+        c = md5ii(c, d, a, b, x[i + 6], 15, -1560198380);
+        b = md5ii(b, c, d, a, x[i + 13], 21, 1309151649);
+        a = md5ii(a, b, c, d, x[i + 4], 6, -145523070);
+        d = md5ii(d, a, b, c, x[i + 11], 10, -1120210379);
+        c = md5ii(c, d, a, b, x[i + 2], 15, 718787259);
+        b = md5ii(b, c, d, a, x[i + 9], 21, -343485551);
+
+        a = safeAdd(a, olda);
+        b = safeAdd(b, oldb);
+        c = safeAdd(c, oldc);
+        d = safeAdd(d, oldd);
+    }
+    return [a, b, c, d]
+}
+
+/*
+* Convert an array of little-endian words to a string
+*/
+function binl2rstr(input) {
+    var i;
+    var output = '';
+    var length32 = input.length * 32;
+    for (i = 0; i < length32; i += 8) {
+        output += String.fromCharCode((input[i >> 5] >>> (i % 32)) & 0xFF);
+    }
+    return output
+}
+
+/*
+* Convert a raw string to an array of little-endian words
+* Characters >255 have their high-byte silently ignored.
+*/
+function rstr2binl(input) {
+    var i;
+    var output = [];
+    output[(input.length >> 2) - 1] = undefined;
+    for (i = 0; i < output.length; i += 1) {
+        output[i] = 0;
+    }
+    var length8 = input.length * 8;
+    for (i = 0; i < length8; i += 8) {
+        output[i >> 5] |= (input.charCodeAt(i / 8) & 0xFF) << (i % 32);
+    }
+    return output
+}
+
+/*
+* Calculate the MD5 of a raw string
+*/
+function rstrMD5(s) {
+    return binl2rstr(binlMD5(rstr2binl(s), s.length * 8))
+}
+
+/*
+* Calculate the HMAC-MD5, of a key and some data (raw strings)
+*/
+function rstrHMACMD5(key, data) {
+    var i;
+    var bkey = rstr2binl(key);
+    var ipad = [];
+    var opad = [];
+    var hash;
+    ipad[15] = opad[15] = undefined;
+    if (bkey.length > 16) {
+        bkey = binlMD5(bkey, key.length * 8);
+    }
+    for (i = 0; i < 16; i += 1) {
+        ipad[i] = bkey[i] ^ 0x36363636;
+        opad[i] = bkey[i] ^ 0x5C5C5C5C;
+    }
+    hash = binlMD5(ipad.concat(rstr2binl(data)), 512 + data.length * 8);
+    return binl2rstr(binlMD5(opad.concat(hash), 512 + 128))
+}
+
+/*
+* Convert a raw string to a hex string
+*/
+function rstr2hex(input) {
+    var hexTab = '0123456789abcdef';
+    var output = '';
+    var x;
+    var i;
+    for (i = 0; i < input.length; i += 1) {
+        x = input.charCodeAt(i);
+        output += hexTab.charAt((x >>> 4) & 0x0F) +
+            hexTab.charAt(x & 0x0F);
+    }
+    return output
+}
+
+/*
+* Encode a string as utf-8
+*/
+function str2rstrUTF8(input) {
+    return unescape(encodeURIComponent(input))
+}
+
+/*
+* Take string arguments and return either raw or hex encoded strings
+*/
+function rawMD5(s) {
+    return rstrMD5(str2rstrUTF8(s))
+}
+function hexMD5(s) {
+    return rstr2hex(rawMD5(s))
+}
+function rawHMACMD5(k, d) {
+    return rstrHMACMD5(str2rstrUTF8(k), str2rstrUTF8(d))
+}
+function hexHMACMD5(k, d) {
+    return rstr2hex(rawHMACMD5(k, d))
+}
+
+function md5(string, key, raw) {
+    if (!key) {
+        if (!raw) {
+            return hexMD5(string)
+        }
+        return rawMD5(string)
+    }
+    if (!raw) {
+        return hexHMACMD5(key, string)
+    }
+    return rawHMACMD5(key, string)
 }
 
 // TODO: asm.js
@@ -3247,6 +3417,176 @@ class RTSPMessage {
 
 const MessageBuilder = new RTSPMessage(RTSPMessage.RTSP_1_0);
 
+// TODO: asm.js
+class NALUAsm {
+    static get NALTYPE_FU_A() {return 28;}
+    static get NALTYPE_FU_B() {return 29;}
+
+    constructor() {
+        this.nalu = null;
+    }
+
+    onNALUFragment(rawData, dts, pts) {
+
+        var data = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
+
+        var nalhdr = data.getUint8(0);
+
+        var nri = nalhdr & 0x60;
+        var naltype = nalhdr & 0x1F;
+        var nal_start_idx = 1;
+
+        if (27 >= naltype && 0 < naltype) {
+            /* This RTP package is a single NALU, dispatch and forget, 0 is undefined */
+            return [new NALU(naltype, nri, rawData.subarray(nal_start_idx), dts, pts)];
+            //return;
+        }
+
+        if (NALUAsm.NALTYPE_FU_A !== naltype && NALUAsm.NALTYPE_FU_B !== naltype) {
+            /* 30 - 31 is undefined, ignore those (RFC3984). */
+            Log.log('Undefined NAL unit, type: ' + naltype);
+            return null;
+        }
+        nal_start_idx++;
+
+        var nalfrag = data.getUint8(1);
+        var nfstart = (nalfrag & 0x80) >>> 7;
+        var nfend = (nalfrag & 0x40) >>> 6;
+        var nftype = nalfrag & 0x1F;
+
+        var nfdon = 0;
+        if (NALUAsm.NALTYPE_FU_B === naltype) {
+            nfdon = data.getUint16(2);
+            nal_start_idx+=2;
+        }
+
+        if (null === this.nalu || nfstart) {
+            if (!nfstart) {
+                console.log('broken chunk (continuation of lost frame)');
+                return null;
+            }  // Ignore broken chunks
+
+            /* Create a new NAL unit from multiple fragmented NAL units */
+            this.nalu = new NALU(nftype, nri, rawData.subarray(nal_start_idx), dts, pts);
+        } else {
+            if (this.nalu.dts != dts) {
+                // debugger;
+                // Frames lost
+                console.log('broken chunk (continuation of frame with other timestamp)');
+                this.nalu = null;
+                return null;
+            }
+            /* We've already created the NAL unit, append current data */
+            this.nalu.appendData(rawData.subarray(nal_start_idx));
+        }
+
+        if (1 === nfend) {
+            let ret = this.nalu;
+            this.nalu = null;
+            return [ret];
+        }
+    }
+}
+
+class AACFrame {
+
+    constructor(data, dts, pts) {
+        this.dts = dts;
+        this.pts = pts ? pts : this.dts;
+
+        this.data=data;//.subarray(offset);
+    }
+
+    getData() {
+        return this.data;
+    }
+
+    getSize() {
+        return this.data.byteLength;
+    }
+}
+
+// import {AACParser} from "../parsers/aac.js";
+// TODO: asm.js
+class AACAsm {
+    constructor() {
+        this.config = null;
+    }
+
+    onAACFragment(pkt) {
+        let rawData = pkt.getPayload();
+        if (!pkt.media) {
+            return null;
+        }
+        let data = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
+
+        let sizeLength = Number(pkt.media.fmtp['sizelength'] || 0);
+        let indexLength = Number(pkt.media.fmtp['indexlength'] || 0);
+        let indexDeltaLength = Number(pkt.media.fmtp['indexdeltalength'] || 0);
+        let CTSDeltaLength = Number(pkt.media.fmtp['ctsdeltalength'] || 0);
+        let DTSDeltaLength = Number(pkt.media.fmtp['dtsdeltalength'] || 0);
+        let RandomAccessIndication = Number(pkt.media.fmtp['randomaccessindication'] || 0);
+        let StreamStateIndication = Number(pkt.media.fmtp['streamstateindication'] || 0);
+        let AuxiliaryDataSizeLength = Number(pkt.media.fmtp['auxiliarydatasizelength'] || 0);
+
+        let configHeaderLength =
+            sizeLength + Math.max(indexLength, indexDeltaLength) + CTSDeltaLength + DTSDeltaLength +
+            RandomAccessIndication + StreamStateIndication + AuxiliaryDataSizeLength;
+
+
+        let auHeadersLengthPadded = 0;
+        let offset = 0;
+        let ts = (Math.round(pkt.getTimestampMS()/1024) << 10) * 90000 / this.config.samplerate;
+        if (0 !== configHeaderLength) {
+            /* The AU header section is not empty, read it from payload */
+            let auHeadersLengthInBits = data.getUint16(0); // Always 2 octets, without padding
+            auHeadersLengthPadded = 2 + (auHeadersLengthInBits>>>3) + ((auHeadersLengthInBits & 0x7)?1:0); // Add padding
+
+            //this.config = AACParser.parseAudioSpecificConfig(new Uint8Array(rawData, 0 , auHeadersLengthPadded));
+            // TODO: parse config
+            let frames = [];
+            let frameOffset=0;
+            let bits = new BitArray(rawData.subarray(2 + offset));
+            let cts = 0;
+            let dts = 0;
+            for (let offset=0; offset<auHeadersLengthInBits;) {
+                let size = bits.readBits(sizeLength);
+                let idx = bits.readBits(offset?indexDeltaLength:indexLength);
+                offset+=sizeLength+(offset?indexDeltaLength:indexLength)/*+2*/;
+                if (/*ctsPresent &&*/ CTSDeltaLength) {
+                    let ctsPresent = bits.readBits(1);
+                    cts = bits.readBits(CTSDeltaLength);
+                    offset+=CTSDeltaLength;
+                }
+                if (/*dtsPresent && */DTSDeltaLength) {
+                    let dtsPresent = bits.readBits(1);
+                    dts = bits.readBits(DTSDeltaLength);
+                    offset+=CTSDeltaLength;
+                }
+                if (RandomAccessIndication) {
+                    bits.skipBits(1);
+                    offset+=1;
+                }
+                if (StreamStateIndication) {
+                    bits.skipBits(StreamStateIndication);
+                    offset+=StreamStateIndication;
+                }
+                frames.push(new AACFrame(rawData.subarray(auHeadersLengthPadded + frameOffset, auHeadersLengthPadded + frameOffset + size), ts+dts, ts+cts));
+                frameOffset+=size;
+            }
+            return frames;
+        } else {
+            let aacData = rawData.subarray(auHeadersLengthPadded);
+            while (true) {
+                if (aacData[offset] !=255) break;
+                ++offset;
+            }
+            ++offset;
+            return [new AACFrame(rawData.subarray(auHeadersLengthPadded+offset), ts)];
+        }
+    }
+}
+
 class RTPPayloadParser {
 
     constructor() {
@@ -3291,7 +3631,7 @@ class RTPAACParser {
 }
 
 class BaseClient {
-    constructor(transport, options={flush: 100}) {
+    constructor(options={flush: 100}) {
         this.options = options;
         this.eventSource = new EventEmitter();
 
@@ -3311,7 +3651,6 @@ class BaseClient {
         };
         this._onConnect = this.onConnected.bind(this);
         this._onDisconnect = this.onDisconnected.bind(this);
-        this.attachTransport(transport);
     }
 
     static streamType() {
@@ -3323,7 +3662,9 @@ class BaseClient {
     }
 
     attachTransport(transport) {
-        this.detachTransport();
+        if (this.transport) {
+            this.detachTransport();
+        }
         this.transport = transport;
         this.transport.eventSource.addEventListener('data', this._onData);
         this.transport.eventSource.addEventListener('connected', this._onConnect);
@@ -3335,7 +3676,11 @@ class BaseClient {
             this.transport.eventSource.removeEventListener('data', this._onData);
             this.transport.eventSource.removeEventListener('connected', this._onConnect);
             this.transport.eventSource.removeEventListener('disconnected', this._onDisconnect);
+            this.transport = null;
         }
+    }
+    reset() {
+
     }
 
     start() {
@@ -3389,6 +3734,60 @@ class BaseClient {
     }
 }
 
+class AACParser {
+    static get SampleRates() {return  [
+        96000, 88200,
+        64000, 48000,
+        44100, 32000,
+        24000, 22050,
+        16000, 12000,
+        11025, 8000,
+        7350];}
+
+    // static Profile = [
+    //     0: Null
+    //     1: AAC Main
+    //     2: AAC LC (Low Complexity)
+    //     3: AAC SSR (Scalable Sample Rate)
+    //     4: AAC LTP (Long Term Prediction)
+    //     5: SBR (Spectral Band Replication)
+    //     6: AAC Scalable
+    // ]
+
+    static parseAudioSpecificConfig(bytesOrBits) {
+        let config;
+        if (bytesOrBits.byteLength) { // is byteArray
+            config = new BitArray(bytesOrBits);
+        } else {
+            config = bytesOrBits;
+        }
+
+        let bitpos = config.bitpos+(config.src.byteOffset+config.bytepos)*8;
+        let prof = config.readBits(5);
+        this.codec = `mp4a.40.${prof}`;
+        let sfi = config.readBits(4);
+        if (sfi == 0xf) config.skipBits(24);
+        let channels = config.readBits(4);
+
+        return {
+            config: bitSlice(new Uint8Array(config.src.buffer), bitpos, bitpos+16),
+            codec: `mp4a.40.${prof}`,
+            samplerate: AACParser.SampleRates[sfi],
+            channels: channels
+        }
+    }
+
+    static parseStreamMuxConfig(bytes) {
+        // ISO_IEC_14496-3 Part 3 Audio. StreamMuxConfig
+        let config = new BitArray(bytes);
+
+        if (!config.readBits(1)) {
+            config.skipBits(14);
+            return AACParser.parseAudioSpecificConfig(config);
+        }
+    }
+}
+
 // import {RTP} from './rtp/rtp';
 const LOG_TAG$2 = "client:rtsp";
 const Log$7 = getTagged(LOG_TAG$2);
@@ -3396,9 +3795,9 @@ const Log$7 = getTagged(LOG_TAG$2);
 
 
 class RTSPClient extends BaseClient {
-    constructor(transport, options={flush: 200}) {
-        super(transport, options);
-        this.clientSM = new RTSPClientSM(this, transport);
+    constructor(options={flush: 200}) {
+        super(options);
+        this.clientSM = new RTSPClientSM(this);
         this.clientSM.ontracks = (tracks) => {
             this.eventSource.dispatchEvent('tracks', tracks);
             this.startStreamFlush();
@@ -3414,6 +3813,20 @@ class RTSPClient extends BaseClient {
         super.setSource(url);
         this.clientSM.setSource(url);
     }
+    attachTransport(transport) {
+        super.attachTransport(transport);
+        this.clientSM.transport = transport;
+    }
+
+    detachTransport() {
+        super.detachTransport();
+        this.clientSM.transport = null;
+    }
+
+    reset() {
+        super.reset();
+        this.sampleQueues={};
+    }
 
     destroy() {
         this.clientSM.destroy();
@@ -3422,9 +3835,13 @@ class RTSPClient extends BaseClient {
 
     start() {
         super.start();
-        this.transport.ready.then(()=> {
-            this.clientSM.start();
-        });
+        if (this.transport) {
+            return this.transport.ready.then(() => {
+                return this.clientSM.start();
+            });
+        } else {
+            return Promise.reject("no transport attached");
+        }
     }
 
     onData(data) {
@@ -3442,6 +3859,12 @@ class RTSPClient extends BaseClient {
     }
 }
 
+class AuthError extends Error {
+    constructor(msg) {
+        super(msg);
+    }
+}
+
 class RTSPClientSM extends StateMachine {
     static get USER_AGENT() {return 'SFRtsp 0.3';}
     static get STATE_INITIAL() {return  1 << 0;}
@@ -3452,16 +3875,14 @@ class RTSPClientSM extends StateMachine {
     static get STATE_TEARDOWN() {return  1 << 5;}
     // static STATE_PAUSED = 1 << 6;
 
-    constructor(parent, transport) {
+    constructor(parent) {
         super();
 
         this.parent = parent;
-        this.transport = transport;
+        this.transport = null;
         this.payParser = new RTPPayloadParser();
         this.rtp_channels = new Set();
         this.ontracks = null;
-
-        this.reset();
 
         this.addState(RTSPClientSM.STATE_INITIAL,{
         }).addState(RTSPClientSM.STATE_OPTIONS, {
@@ -3496,7 +3917,7 @@ class RTSPClientSM extends StateMachine {
             .addTransition(RTSPClientSM.STATE_DESCRIBE, RTSPClientSM.STATE_TEARDOWN)
             .addTransition(RTSPClientSM.STATE_OPTIONS, RTSPClientSM.STATE_TEARDOWN);
 
-        this.transitionTo(RTSPClientSM.STATE_INITIAL);
+        this.reset();
 
         this.shouldReconnect = false;
 
@@ -3525,8 +3946,9 @@ class RTSPClientSM extends StateMachine {
     }
 
     setSource(url) {
+        this.reset();
         this.endpoint = url;
-        this.url = url.urlpath;
+        this.url = url.full;
     }
 
     onConnected() {
@@ -3546,9 +3968,10 @@ class RTSPClientSM extends StateMachine {
 
     start() {
         if (this.state != RTSPClientSM.STATE_STREAMS) {
-            this.transitionTo(RTSPClientSM.STATE_OPTIONS);
+            return this.transitionTo(RTSPClientSM.STATE_OPTIONS);
         } else {
             // TODO: seekable
+            return Promise.resolve();
         }
     }
 
@@ -3572,7 +3995,8 @@ class RTSPClientSM extends StateMachine {
         // this.mse = null;
     }
 
-    reset() {
+    async reset() {
+        this.authenticator = '';
         this.methods = [];
         this.tracks = [];
         for (let stream in this.streams) {
@@ -3580,6 +4004,14 @@ class RTSPClientSM extends StateMachine {
         }
         this.streams={};
         this.contentBase = "";
+        if (this.currentState) {
+            if (this.currentState.name != RTSPClientSM.STATE_INITIAL) {
+                await this.transitionTo(RTSPClientSM.STATE_TEARDOWN);
+                await this.transitionTo(RTSPClientSM.STATE_INITIAL);
+            }
+        } else {
+            await this.transitionTo(RTSPClientSM.STATE_INITIAL);
+        }
         this.state = RTSPClientSM.STATE_INITIAL;
         this.sdp = null;
         this.interleaveChannelIndex = 0;
@@ -3587,15 +4019,14 @@ class RTSPClientSM extends StateMachine {
         this.timeOffset = {};
     }
 
-    reconnect() {
+    async reconnect() {
         //this.parent.eventSource.dispatchEvent('clear');
-        this.reset();
+        await this.reset();
         if (this.currentState.name != RTSPClientSM.STATE_INITIAL) {
-            this.transitionTo(RTSPClientSM.STATE_TEARDOWN).then(()=> {
-                this.transitionTo(RTSPClientSM.STATE_OPTIONS);
-            });
+            await this.transitionTo(RTSPClientSM.STATE_TEARDOWN);
+            return this.transitionTo(RTSPClientSM.STATE_OPTIONS);
         } else {
-            this.transitionTo(RTSPClientSM.STATE_OPTIONS);
+            return this.transitionTo(RTSPClientSM.STATE_OPTIONS);
         }
     }
 
@@ -3623,25 +4054,66 @@ class RTSPClientSM extends StateMachine {
             CSeq: this.cSeq,
             'User-Agent': RTSPClientSM.USER_AGENT
         });
-        if (_host != '*' && this.parent.endpoint.auth) {
+        if (/*_host != '*' && this.parent.endpoint.auth*/this.authenticator) {
             // TODO: DIGEST authentication
-            _params['Authorization'] = `Basic ${btoa(this.parent.endpoint.auth)}`;
+            // _params['Authorization'] = this.authenticator;//`Basic ${btoa(this.parent.endpoint.auth)}`;
+            _params['Authorization'] = this.authenticator(_cmd);
         }
-        return this.send(MessageBuilder.build(_cmd, _host, _params, _payload));
+        return this.send(MessageBuilder.build(_cmd, _host, _params, _payload), _cmd).catch((e)=>{
+            if (e instanceof AuthError) {
+                return this.sendRequest(_cmd, _host, _params, _payload);
+            } else {
+                throw e;
+            }
+        });
     }
 
-    send(_data) {
-        return this.transport.ready.then(()=> {
-            Log$7.debug(_data);
-            return this.transport.send(_data).then(this.parse.bind(this)).then((parsed)=> {
-                // TODO: parse status codes
-                if (parsed.code>=300) {
-                    Log$7.error(parsed.statusLine);
-                    throw new Error(`RTSP error: ${parsed.code} ${parsed.message}`);
-                }
-                return parsed;
+    send(_data, _method) {
+        if (this.transport) {
+            return this.transport.ready.then(() => {
+                Log$7.debug(_data);
+                return this.transport.send(_data).then(this.parse.bind(this)).then((parsed) => {
+                    // TODO: parse status codes
+                    if (parsed.code == 401 && !this.authenticator ) {
+                        Log$7.debug(parsed.headers['www-authenticate']);
+                        let auth = parsed.headers['www-authenticate'];
+                        let method = auth.substring(0, auth.indexOf(' '));
+                        auth = auth.substr(method.length+1);
+                        let chunks = auth.split(',');
+                        if (method.toLowerCase() == 'digest') {
+                            let parsedChunks = {};
+                            for (let chunk of chunks) {
+                                let c = chunk.trim();
+                                let [k,v] = c.split('=');
+                                parsedChunks[k] = v.substr(1, v.length-2);
+                            }
+                            this.authenticator = (_method)=>{
+                                let ep = this.parent.endpoint;
+                                let ha1 = md5(`${ep.user}:${parsedChunks.realm}:${ep.pass}`);
+                                let ha2 = md5(`${_method}:${ep.urlpath}`);
+                                let response = md5(`${ha1}:${parsedChunks.nonce}:${ha2}`);
+                                let tail=''; // TODO: handle other params
+                                return `Digest username="${ep.user}", nonce="${parsedChunks.nonce}", uri="${ep.urlpath}", response="${response}"${tail}`;
+                            };
+                        } else {
+                            this.authenticator = ()=>{return `Basic ${btoa(this.parent.endpoint.auth)}`;};
+                        }
+
+                        throw new AuthError(parsed);
+                    }
+                    if (parsed.code >= 300) {
+                        Log$7.error(parsed.statusLine);
+                        throw new Error(`RTSP error: ${parsed.code} ${parsed.statusLine}`);
+                    }
+                    return parsed;
+                });
+            }).catch((e)=>{
+                this.onDisconnected.bind(this);
+                throw e;
             });
-        }).catch(this.onDisconnected.bind(this));
+        } else {
+            return Promise.reject("No transport attached");
+        }
     }
 
     sendOptions() {
@@ -3768,71 +4240,17 @@ class RTSPClientSM extends StateMachine {
         if (rtp.media) {
             let pay = this.payParser.parse(rtp);
             if (pay) {
-                this.parent.sampleQueues[rtp.type].push([pay]);
+                // if (typeof pay == typeof []) {
+                this.parent.sampleQueues[rtp.type].push(pay);
+                // } else {
+                //     this.parent.sampleQueues[rtp.type].push([pay]);
+                // }
             }
         }
 
         // this.remuxer.feedRTP();
     }
 }
-
-class BaseTransport {
-    constructor(endpoint, stream_type, config={}) {
-        this.stream_type = stream_type;
-        this.endpoint = endpoint;
-        this.eventSource = new EventEmitter();
-        this.dataQueue = [];
-    }
-
-    static canTransfer(stream_type) {
-        return BaseTransport.streamTypes().includes(stream_type);
-    }
-    
-    static streamTypes() {
-        return [];
-    }
-
-    destroy() {
-        this.eventSource.destroy();
-    }
-
-    connect() {
-        // TO be impemented
-    }
-
-    disconnect() {
-        // TO be impemented
-    }
-
-    reconnect() {
-        return this.disconnect().then(()=>{
-            return this.connect();
-        });
-    }
-
-    setEndpoint(endpoint) {
-        this.endpoint = endpoint;
-        return this.reconnect();
-    }
-
-    send(data) {
-        // TO be impemented
-        // return this.prepare(data).send();
-    }
-
-    prepare(data) {
-        // TO be impemented
-        // return new Request(data);
-    }
-
-    // onData(type, data) {
-    //     this.eventSource.dispatchEvent(type, data);
-    // }
-}
-
-const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-//navigator.hardwareConcurrency || 3;
 
 // ASN.1 JavaScript decoder
 // Copyright (c) 2008-2013 Lapo Luchini <lapo@lapo.it>
@@ -8070,6 +8488,66 @@ JSEncrypt.prototype.getPublicKeyB64 = function () {
   return this.getKey().getPublicBaseKeyB64();
 };
 
+// export * from 'jsencrypt';
+
+class BaseTransport {
+    constructor(endpoint, stream_type, config={}) {
+        this.stream_type = stream_type;
+        this.endpoint = endpoint;
+        this.eventSource = new EventEmitter();
+        this.dataQueue = [];
+    }
+
+    static canTransfer(stream_type) {
+        return BaseTransport.streamTypes().includes(stream_type);
+    }
+    
+    static streamTypes() {
+        return [];
+    }
+
+    destroy() {
+        this.eventSource.destroy();
+    }
+
+    connect() {
+        // TO be impemented
+    }
+
+    disconnect() {
+        // TO be impemented
+    }
+
+    reconnect() {
+        return this.disconnect().then(()=>{
+            return this.connect();
+        });
+    }
+
+    setEndpoint(endpoint) {
+        this.endpoint = endpoint;
+        return this.reconnect();
+    }
+
+    send(data) {
+        // TO be impemented
+        // return this.prepare(data).send();
+    }
+
+    prepare(data) {
+        // TO be impemented
+        // return new Request(data);
+    }
+
+    // onData(type, data) {
+    //     this.eventSource.dispatchEvent(type, data);
+    // }
+}
+
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+//navigator.hardwareConcurrency || 3;
+
 const LOG_TAG$4 = "transport:ws";
 const Log$10 = getTagged(LOG_TAG$4);
 class WebsocketTransport extends BaseTransport {
@@ -8083,6 +8561,13 @@ class WebsocketTransport extends BaseTransport {
         this.workers = 1;
         this.socket_url = options.socket;
         this.ready = this.connect();
+    }
+
+    destroy() {
+        return this.disconnect().then(()=>{
+            return super.destroy();
+        });
+
     }
 
     static canTransfer(stream_type) {
@@ -8133,7 +8618,7 @@ class WebsocketTransport extends BaseTransport {
     disconnect() {
         let promises = [];
         for (let i=0; i<this.proxies.length; ++i) {
-            this.proxies[i].close();
+            promises.push(this.proxies[i].close());
         }
         this.proxies= [];
         if (this.proxies.length) {
@@ -8411,7 +8896,12 @@ class StreamType {
     }
 
     static fromUrl(url) {
-        let parsed = Url.parse(url);
+        let parsed;
+        try {
+            parsed = Url.parse(url);
+        } catch (e) {
+            return null;
+        }
         switch (parsed.protocol) {
             case 'rtsp':
                 return StreamType.RTSP;
@@ -8455,6 +8945,7 @@ class WSPlayer {
                 constructor: WebsocketTransport
             }
         };
+        this.errorHandler = opts.errorHandler || null;
 
         this.modules = {};
         for (let module of modules) {
@@ -8483,12 +8974,14 @@ class WSPlayer {
                     }
                 }
             }
-            if (!this.url) {
-                 throw new Error('No playable endpoint found');
-            }
+            // if (!this.url) {
+            //      throw new Error('No playable endpoint found');
+            // }
         }
 
-        this.setSource(this.url, this.type);
+        if (this.url) {
+            this.setSource(this.url, this.type);
+        }
 
         this.player.addEventListener('play', ()=>{
             if (!this.isPlaying()) {
@@ -8531,6 +9024,11 @@ class WSPlayer {
         return StreamType.fromMime(resource.type) || StreamType.fromUrl(resource.src);
     }
 
+    canPlayUrl(src) {
+        let type = StreamType.fromUrl(src);
+        return (type in this.modules);
+    }
+
     _checkSource(src) {
         if (!src.dataset['ignore'] && src.src && !this.player.canPlayType(src.type) && (StreamType.fromMime(src.type) || StreamType.fromUrl(src.src))) {
             this.url = src.src;
@@ -8540,11 +9038,18 @@ class WSPlayer {
         return false;
     }
 
-    setSource(url, type) {
+    async setSource(url, type) {
         if (this.transport) {
-            this.transport.destroy();
+            if (this.client) {
+                await this.client.detachTransport();
+            }
+            await this.transport.destroy();
         }
-        this.endpoint = Url.parse(url);
+        try {
+            this.endpoint = Url.parse(url);
+        } catch (e) {
+            return;
+        }
         this.url = url;
         let transport = this.modules[type].transport;
         this.transport = new transport.constructor(this.endpoint, this.type, transport.options);
@@ -8558,760 +9063,68 @@ class WSPlayer {
 
         if (lastType!=this.type || !this.client) {
             if (this.client) {
-                this.client.destroy();
+                await this.client.destroy();
             }
             let client = this.modules[type].client;
-            this.client = new client(this.transport);
-            if (!this.remuxer) {
-                this.remuxer = new Remuxer(this.player);
-            }
-            this.remuxer.attachClient(this.client);
+            this.client = new client();
         }
+
+        this.client.reset();
+        if (this.remuxer) {
+            this.remuxer.destroy();
+            this.remuxer = null;
+        }
+        this.remuxer = new Remuxer(this.player);
+        this.remuxer.attachClient(this.client);
+
         this.client.attachTransport(this.transport);
         this.client.setSource(this.endpoint);
 
         if (this.player.autoplay) {
-            this.client.start();
-        }
-    }
-
-    start() {
-        this.client.start();
-    }
-
-    stop() {
-        this.client.stop();
-    }
-
-}
-
-const LOG_TAG$5 = "transport:ws";
-const Log$11 = getTagged(LOG_TAG$5);
-class WebsocketTransport$1 extends BaseTransport {
-    constructor(endpoint, stream_type, options={
-        socket:`${location.protocol.replace('http', 'ws')}//${location.host}/ws/`,
-        workers: 1
-    }) {
-        super(endpoint, stream_type);
-        this.proxies = [];
-        this.currentProxy = 0;
-        this.workers = 1;
-        this.socket_url = options.socket;
-        this.ready = this.connect();
-    }
-
-    static canTransfer(stream_type) {
-        return WebsocketTransport$1.streamTypes().includes(stream_type);
-    }
-
-    static streamTypes() {
-        return ['hls', 'rtsp'];
-    }
-
-    connect() {
-        return this.disconnect().then(()=>{
-            let promises = [];
-            // TODO: get mirror list
-            for (let i=0; i<this.workers; ++i) {
-                let proxy = new WebSocketProxy$1(this.socket_url, this.endpoint, this.stream_type);
-
-                proxy.set_disconnect_handler((e)=> {
-                    this.eventSource.dispatchEvent('disconnected', {code: e.code, reason: e.reason});
-                    // TODO: only reconnect on demand
-                    if ([1000, 1006, 1013, 1011].includes(e.code)) {
-                        setTimeout(()=> {
-                            if (this.ready && this.ready.reject) {
-                                this.ready.reject();
-                            }
-                            this.ready = this.connect();
-                        }, 3000);
-                    }
-                });
-
-                proxy.set_data_handler((data)=> {
-                    this.dataQueue.push(new Uint8Array(data));
-                    this.eventSource.dispatchEvent('data');
-                });
-
-                promises.push(proxy.connect().then(()=> {
-                    this.eventSource.dispatchEvent('connected');
-                }).catch((e)=> {
-                    this.eventSource.dispatchEvent('error');
-                    throw new Error(e);
-                }));
-                this.proxies.push(proxy);
-            }
-            return Promise.all(promises);
-        });
-    }
-
-    disconnect() {
-        let promises = [];
-        for (let i=0; i<this.proxies.length; ++i) {
-            this.proxies[i].close();
-        }
-        this.proxies= [];
-        if (this.proxies.length) {
-            return Promise.all(promises);
-        } else {
-            return Promise.resolve();
-        }
-    }
-
-    socket() {
-        return this.proxies[(this.currentProxy++)%this.proxies.length];
-    }
-
-    send(_data, fn) {
-        let res = this.socket().send(_data);
-        if (fn) {
-            fn(res.seq);
-        }
-        return res.promise;
-    }
-}
-
-class WSPProtocol$1 {
-    static get PROTO() {return  'WSP';}
-
-    static get V1_1() {return '1.1';}
-
-    static get CMD_INIT() {return 'INIT';}
-    static get CMD_JOIN() {return  'JOIN';}
-    static get CMD_WRAP() {return  'WRAP';}
-
-
-    constructor(ver){
-        this.ver = ver;
-    }
-
-    build(cmd, data, payload=''){
-        let data_str='';
-        if (!data.seq) {
-            data.seq = ++WSPProtocol$1.seq;
-        }
-        for (let k in data) {
-            data_str += `${k}: ${data[k]}\r\n`;
-        }
-        return `${WSPProtocol$1.PROTO}/${this.ver} ${cmd}\r\n${data_str}\r\n${payload}`;
-    }
-
-    static parse(data) {
-        let payIdx = data.indexOf('\r\n\r\n');
-        let lines = data.substr(0, payIdx).split('\r\n');
-        let hdr = lines.shift().match(new RegExp(`${WSPProtocol$1.PROTO}/${WSPProtocol$1.V1_1}\\s+(\\d+)\\s+(.+)`));
-        if (hdr) {
-            let res = {
-                code: Number(hdr[1]),
-                msg:  hdr[2],
-                data: {},
-                payload: ''
-            };
-            while (lines.length) {
-                let line = lines.shift();
-                if (line) {
-                    let [k,v] = line.split(':');
-                    res.data[k.trim()] = v.trim();
-                } else {
-                    break;
-                }
-            }
-            res.payload = data.substr(payIdx+4);
-            return res;
-        }
-        return null;
-    }
-}
-WSPProtocol$1.seq = 0;
-
-class WebSocketProxy$1 {
-    static get CHN_CONTROL() {return 'control';}
-    static get CHN_DATA() {return  'data';}
-
-    constructor(wsurl, endpoint, stream_type) {
-        this.url = wsurl;
-        this.stream_type = stream_type;
-        this.endpoint = endpoint;
-        this.data_handler = ()=>{};
-        this.disconnect_handler = ()=>{};
-        this.builder = new WSPProtocol$1(WSPProtocol$1.V1_1);
-        this.awaitingPromises = {};
-        this.seq = 0;
-        this.encryptor = new JSEncrypt();
-    }
-
-    set_data_handler(handler) {
-        this.data_handler = handler;
-    }
-
-    set_disconnect_handler(handler) {
-        this.disconnect_handler = handler;
-    }
-
-    close() {
-        Log$11.log('closing connection');
-        return new Promise((resolve)=>{
-            this.ctrlChannel.onclose = ()=>{
-                if (this.dataChannel) {
-                    this.dataChannel.onclose = ()=>{
-                        Log$11.log('closed');
-                        resolve();
-                    };
-                    this.dataChannel.close();
-                } else {
-                    Log$11.log('closed');
-                    resolve();
-                }
-            };
-            this.ctrlChannel.close();
-        });
-    }
-
-    onDisconnect(){
-        this.ctrlChannel.onclose=null;
-        this.ctrlChannel.close();
-        if (this.dataChannel) {
-            this.dataChannel.onclose = null;
-            this.dataChannel.close();
-        }
-        this.disconnect_handler(this);
-    }
-
-    initDataChannel(channel_id) {
-        return new Promise((resolve, reject)=>{
-            this.dataChannel = new WebSocket(this.url, WebSocketProxy$1.CHN_DATA);
-            this.dataChannel.binaryType = 'arraybuffer';
-            this.dataChannel.onopen = ()=>{
-                let msg = this.builder.build(WSPProtocol$1.CMD_JOIN, {
-                    channel: channel_id
-                });
-                Log$11.debug(msg);
-                this.dataChannel.send(msg);
-            };
-            this.dataChannel.onmessage = (ev)=>{
-                Log$11.debug(`[data]\r\n${ev.data}`);
-                let res = WSPProtocol$1.parse(ev.data);
-                if (!res) {
-                    return reject();
-                }
-
-                this.dataChannel.onmessage=(e)=>{
-                    Log$11.debug('got data');
-                    if (this.data_handler) {
-                        this.data_handler(e.data);
-                    }
-                };
-                resolve();
-            };
-            this.dataChannel.onerror = (e)=>{
-                Log$11.error(`[data] ${e.type}`);
-                this.dataChannel.close();
-            };
-            this.dataChannel.onclose = (e)=>{
-                Log$11.error(`[data] ${e.type}. code: ${e.code}, reason: ${e.reason || 'unknown reason'}`);
-                this.onDisconnect(e);
-            };
-        });
-    }
-
-    connect() {
-        this.encryptionKey = null;
-        return new Promise((resolve, reject)=>{
-            this.ctrlChannel = new WebSocket(this.url, WebSocketProxy$1.CHN_CONTROL);
-
-            this.connected = false;
-
-            this.ctrlChannel.onopen = ()=>{
-                let headers = {
-                    proto: this.stream_type
-                };
-                if (this.endpoint.socket) {
-                    headers.socket = this.endpoint.socket;
-                } else {
-                    Object.assign(headers, {
-                        host:  this.endpoint.host,
-                        port:  this.endpoint.port
-                    });
-                }
-                let msg = this.builder.build(WSPProtocol$1.CMD_INIT, headers);
-                Log$11.debug(msg);
-                this.ctrlChannel.send(msg);
-            };
-
-            this.ctrlChannel.onmessage = (ev)=>{
-                Log$11.debug(`[ctrl]\r\n${ev.data}`);
-
-                let res = WSPProtocol$1.parse(ev.data);
-                if (!res) {
-                    return reject();
-                }
-
-                if (res.code >= 300) {
-                    Log$11.error(`[ctrl]\r\n${res.code}: ${res.msg}`);
-                    return reject();
-                }
-                this.ctrlChannel.onmessage = (e)=> {
-                    let res = WSPProtocol$1.parse(e.data);
-                    Log$11.debug(`[ctrl]\r\n${e.data}`);
-                    if (res.data.seq in this.awaitingPromises) {
-                        if (res.code < 300) {
-                            this.awaitingPromises[res.data.seq].resolve(res);
-                        } else {
-                            this.awaitingPromises[res.data.seq].reject(res);
-                        }
-                        delete this.awaitingPromises[res.data.seq];
-                    }
-                };
-                this.encryptionKey = res.data.pubkey || null;
-                if (this.encryptionKey) {
-                    this.encryptor.setPublicKey(this.encryptionKey);
-                    // TODO: check errors
-                }
-                this.initDataChannel(res.data.channel).then(resolve).catch(reject);
-            };
-
-            this.ctrlChannel.onerror = (e)=>{
-                Log$11.error(`[ctrl] ${e.type}`);
-                this.ctrlChannel.close();
-            };
-            this.ctrlChannel.onclose = (e)=>{
-                Log$11.error(`[ctrl] ${e.type}. code: ${e.code} ${e.reason || 'unknown reason'}`);
-                this.onDisconnect(e);
-            };
-        });
-    }
-
-    encrypt(msg) {
-        if (this.encryptionKey) {
-            let crypted = this.encryptor.encrypt(msg);
-            if (crypted === false) {
-                throw new Error("Encryption failed. Stopping")
-            }
-            return crypted;
-        }
-        return msg;
-    }
-
-    send(payload) {
-        if (this.ctrlChannel.readyState != WebSocket.OPEN) {
-            this.close();
-            // .then(this.connect.bind(this));
-            // return;
-            throw new Error('disconnected');
-        }
-        // Log.debug(payload);
-        let data = {
-            contentLength: payload.length,
-            seq: ++WSPProtocol$1.seq
-        };
-        return {
-            seq:data.seq,
-            promise: new Promise((resolve, reject)=>{
-                this.awaitingPromises[data.seq] = {resolve, reject};
-                let msg = this.builder.build(WSPProtocol$1.CMD_WRAP, data, payload);
-                Log$11.debug(msg);
-                this.ctrlChannel.send(this.encrypt(msg));
-            })};
-    }
-}
-
-// import {RTP} from './rtp/rtp';
-const LOG_TAG$6 = "client:rtsp";
-const Log$12 = getTagged(LOG_TAG$6);
-
-
-
-class RTSPClient$1 extends BaseClient {
-    constructor(transport, options={flush: 200}) {
-        super(transport, options);
-        this.clientSM = new RTSPClientSM$1(this, transport);
-        this.clientSM.ontracks = (tracks) => {
-            this.eventSource.dispatchEvent('tracks', tracks);
-            this.startStreamFlush();
-        };
-        this.sampleQueues={};
-    }
-    
-    static streamType() {
-        return 'rtsp';
-    }
-
-    setSource(url) {
-        super.setSource(url);
-        this.clientSM.setSource(url);
-    }
-
-    destroy() {
-        this.clientSM.destroy();
-        return super.destroy();
-    }
-
-    start() {
-        super.start();
-        this.transport.ready.then(()=> {
-            this.clientSM.start();
-        });
-    }
-
-    onData(data) {
-        this.clientSM.onData(data);
-    }
-
-    onConnected() {
-        this.clientSM.onConnected();
-        super.onConnected();
-    }
-
-    onDisconnected() {
-        super.onDisconnected();
-        this.clientSM.onDisconnected();
-    }
-}
-
-class RTSPClientSM$1 extends StateMachine {
-    static get USER_AGENT() {return 'SFRtsp 0.3';}
-    static get STATE_INITIAL() {return  1 << 0;}
-    static get STATE_OPTIONS() {return 1 << 1;}
-    static get STATE_DESCRIBE () {return  1 << 2;}
-    static get STATE_SETUP() {return  1 << 3;}
-    static get STATE_STREAMS() {return 1 << 4;}
-    static get STATE_TEARDOWN() {return  1 << 5;}
-    // static STATE_PAUSED = 1 << 6;
-
-    constructor(parent, transport) {
-        super();
-
-        this.parent = parent;
-        this.transport = transport;
-        this.payParser = new RTPPayloadParser();
-        this.rtp_channels = new Set();
-        this.ontracks = null;
-
-        this.reset();
-
-        this.addState(RTSPClientSM$1.STATE_INITIAL,{
-        }).addState(RTSPClientSM$1.STATE_OPTIONS, {
-            activate: this.sendOptions,
-            finishTransition: this.onOptions
-        }).addState(RTSPClientSM$1.STATE_DESCRIBE, {
-            activate: this.sendDescribe,
-            finishTransition: this.onDescribe
-        }).addState(RTSPClientSM$1.STATE_SETUP, {
-            activate: this.sendSetup,
-            finishTransition: this.onSetup
-        }).addState(RTSPClientSM$1.STATE_STREAMS, {
-
-        }).addState(RTSPClientSM$1.STATE_TEARDOWN, {
-            activate: ()=>{
-                this.started = false;
-            },
-            finishTransition: ()=>{
-                return this.transitionTo(RTSPClientSM$1.STATE_INITIAL)
-            }
-        }).addTransition(RTSPClientSM$1.STATE_INITIAL, RTSPClientSM$1.STATE_OPTIONS)
-            .addTransition(RTSPClientSM$1.STATE_INITIAL, RTSPClientSM$1.STATE_TEARDOWN)
-            .addTransition(RTSPClientSM$1.STATE_OPTIONS, RTSPClientSM$1.STATE_DESCRIBE)
-            .addTransition(RTSPClientSM$1.STATE_DESCRIBE, RTSPClientSM$1.STATE_SETUP)
-            .addTransition(RTSPClientSM$1.STATE_SETUP, RTSPClientSM$1.STATE_STREAMS)
-            .addTransition(RTSPClientSM$1.STATE_TEARDOWN, RTSPClientSM$1.STATE_INITIAL)
-            // .addTransition(RTSPClientSM.STATE_STREAMS, RTSPClientSM.STATE_PAUSED)
-            // .addTransition(RTSPClientSM.STATE_PAUSED, RTSPClientSM.STATE_STREAMS)
-            .addTransition(RTSPClientSM$1.STATE_STREAMS, RTSPClientSM$1.STATE_TEARDOWN)
-            // .addTransition(RTSPClientSM.STATE_PAUSED, RTSPClientSM.STATE_TEARDOWN)
-            .addTransition(RTSPClientSM$1.STATE_SETUP, RTSPClientSM$1.STATE_TEARDOWN)
-            .addTransition(RTSPClientSM$1.STATE_DESCRIBE, RTSPClientSM$1.STATE_TEARDOWN)
-            .addTransition(RTSPClientSM$1.STATE_OPTIONS, RTSPClientSM$1.STATE_TEARDOWN);
-
-        this.transitionTo(RTSPClientSM$1.STATE_INITIAL);
-
-        this.shouldReconnect = false;
-
-        // TODO: remove listeners
-        // this.connection.eventSource.addEventListener('connected', ()=>{
-        //     if (this.shouldReconnect) {
-        //         this.reconnect();
-        //     }
-        // });
-        // this.connection.eventSource.addEventListener('disconnected', ()=>{
-        //     if (this.started) {
-        //         this.shouldReconnect = true;
-        //     }
-        // });
-        // this.connection.eventSource.addEventListener('data', (data)=>{
-        //     let channel = new DataView(data).getUint8(1);
-        //     if (this.rtp_channels.has(channel)) {
-        //         this.onRTP({packet: new Uint8Array(data, 4), type: channel});
-        //     }
-        //
-        // });
-    }
-
-    destroy() {
-        this.parent = null;
-    }
-
-    setSource(url) {
-        this.endpoint = url;
-        this.url = url.urlpath;
-    }
-
-    onConnected() {
-        if (this.rtpFactory) {
-            this.rtpFactory = null;
-        }
-        if (this.shouldReconnect) {
             this.start();
         }
     }
 
-    onDisconnected() {
-        this.reset();
-        this.shouldReconnect = true;
-        return this.transitionTo(RTSPClientSM$1.STATE_TEARDOWN);
-    }
-
     start() {
-        if (this.state != RTSPClientSM$1.STATE_STREAMS) {
-            this.transitionTo(RTSPClientSM$1.STATE_OPTIONS);
-        } else {
-            // TODO: seekable
+        if (this.client) {
+            this.client.start().catch((e)=>{
+                if (this.errorHandler) {
+                    this.errorHandler(e);
+                }
+            });
         }
-    }
-
-    onData(data) {
-        let channel = data[1];
-        if (this.rtp_channels.has(channel)) {
-            this.onRTP({packet: data.subarray(4), type: channel});
-        }
-    }
-
-    useRTPChannel(channel) {
-        this.rtp_channels.add(channel);
-    }
-
-    forgetRTPChannel(channel) {
-        this.rtp_channels.delete(channel);
     }
 
     stop() {
-        this.shouldReconnect = false;
-        // this.mse = null;
-    }
-
-    reset() {
-        this.methods = [];
-        this.tracks = [];
-        for (let stream in this.streams) {
-            this.streams[stream].reset();
-        }
-        this.streams={};
-        this.contentBase = "";
-        this.state = RTSPClientSM$1.STATE_INITIAL;
-        this.sdp = null;
-        this.interleaveChannelIndex = 0;
-        this.session = null;
-        this.timeOffset = {};
-    }
-
-    reconnect() {
-        //this.parent.eventSource.dispatchEvent('clear');
-        this.reset();
-        if (this.currentState.name != RTSPClientSM$1.STATE_INITIAL) {
-            this.transitionTo(RTSPClientSM$1.STATE_TEARDOWN).then(()=> {
-                this.transitionTo(RTSPClientSM$1.STATE_OPTIONS);
-            });
-        } else {
-            this.transitionTo(RTSPClientSM$1.STATE_OPTIONS);
+        if (this.client) {
+            this.client.stop();
         }
     }
 
-    supports(method) {
-        return this.methods.includes(method)
-    }
-
-    parse(_data) {
-        Log$12.debug(_data.payload);
-        let d=_data.payload.split('\r\n\r\n');
-        let parsed =  MessageBuilder.parse(d[0]);
-        let len = Number(parsed.headers['content-length']);
-        if (len) {
-            let d=_data.payload.split('\r\n\r\n');
-            parsed.body = d[1];
-        } else {
-            parsed.body="";
-        }
-        return parsed
-    }
-
-    sendRequest(_cmd, _host, _params={}, _payload=null) {
-        this.cSeq++;
-        Object.assign(_params, {
-            CSeq: this.cSeq,
-            'User-Agent': RTSPClientSM$1.USER_AGENT
-        });
-        if (_host != '*' && this.parent.endpoint.auth) {
-            // TODO: DIGEST authentication
-            _params['Authorization'] = `Basic ${btoa(this.parent.endpoint.auth)}`;
-        }
-        return this.send(MessageBuilder.build(_cmd, _host, _params, _payload));
-    }
-
-    send(_data) {
-        return this.transport.ready.then(()=> {
-            Log$12.debug(_data);
-            return this.transport.send(_data).then(this.parse.bind(this)).then((parsed)=> {
-                // TODO: parse status codes
-                if (parsed.code>=300) {
-                    Log$12.error(parsed.statusLine);
-                    throw new Error(`RTSP error: ${parsed.code} ${parsed.message}`);
-                }
-                return parsed;
-            });
-        }).catch(this.onDisconnected.bind(this));
-    }
-
-    sendOptions() {
-        this.reset();
-        this.started = true;
-        this.cSeq = 0;
-        return this.sendRequest('OPTIONS', '*', {});
-    }
-
-    onOptions(data) {
-        this.methods = data.headers['public'].split(',').map((e)=>e.trim());
-        this.transitionTo(RTSPClientSM$1.STATE_DESCRIBE);
-    }
-
-    sendDescribe() {
-        return this.sendRequest('DESCRIBE', this.url, {
-            'Accept': 'application/sdp'
-        }).then((data)=>{
-            this.sdp = new SDPParser();
-            return this.sdp.parse(data.body).catch(()=>{
-                throw new Error("Failed to parse SDP");
-            }).then(()=>{return data;});
-        });
-    }
-
-    onDescribe(data) {
-        this.contentBase = data.headers['content-base'] || `${this.endpoint.protocol}://${this.endpoint.location}${this.url}/`;
-        this.tracks = this.sdp.getMediaBlockList();
-        this.rtpFactory = new RTPFactory(this.sdp);
-
-        Log$12.log('SDP contained ' + this.tracks.length + ' track(s). Calling SETUP for each.');
-
-        if (data.headers['session']) {
-            this.session = data.headers['session'];
-        }
-
-        if (!this.tracks.length) {
-            throw new Error("No tracks in SDP");
-        }
-
-        this.transitionTo(RTSPClientSM$1.STATE_SETUP);
-    }
-
-    sendSetup() {
-        let streams=[];
-
-        // TODO: select first video and first audio tracks
-        for (let track_type of this.tracks) {
-            Log$12.log("setup track: "+track_type);
-            // if (track_type=='audio') continue;
-            // if (track_type=='video') continue;
-            let track = this.sdp.getMediaBlock(track_type);
-            if (!PayloadType.string_map[track.rtpmap[track.fmt[0]].name]) continue;
-
-            this.streams[track_type] = new RTSPStream(this, track);
-            let playPromise = this.streams[track_type].start();
-            this.parent.sampleQueues[PayloadType.string_map[track.rtpmap[track.fmt[0]].name]]=[];
-            streams.push(playPromise.then(({track, data})=>{
-                let timeOffset = 0;
-                try {
-                    let rtp_info = data.headers["rtp-info"].split(';');
-                    this.timeOffset[track.fmt[0]] = Number(rtp_info[rtp_info.length - 1].split("=")[1]) ;
-                } catch (e) {
-                    this.timeOffset[track.fmt[0]] = new Date().getTime();
-                }
-
-                let params = {
-                    timescale: 0,
-                    scaleFactor: 0
-                };
-                if (track.fmtp['sprop-parameter-sets']) {
-                    let sps_pps = track.fmtp['sprop-parameter-sets'].split(',');
-                    params = {
-                        sps:base64ToArrayBuffer(sps_pps[0]),
-                        pps:base64ToArrayBuffer(sps_pps[1])
-                    };
-                } else if (track.fmtp['config']) {
-                    let config = track.fmtp['config'];
-                    this.has_config = track.fmtp['cpresent']!='0';
-                    let generic = track.rtpmap[track.fmt[0]].name == 'MPEG4-GENERIC';
-                    if (generic) {
-                        params={config:
-                            AACParser.parseAudioSpecificConfig(hexToByteArray(config))
-                        };
-                        this.payParser.aacparser.setConfig(params.config);
-                    } else if (config) {
-                        // todo: parse audio specific config for mpeg4-generic
-                        params={config:
-                            AACParser.parseStreamMuxConfig(hexToByteArray(config))
-                        };
-                        this.payParser.aacparser.setConfig(params.config);
-                    }
-                }
-                params.duration = this.sdp.sessionBlock.range?this.sdp.sessionBlock.range[1]-this.sdp.sessionBlock.range[0]:1;
-                this.parent.seekable = (params.duration > 1);
-                let res = {
-                    track: track,
-                    offset: timeOffset,
-                    type: PayloadType.string_map[track.rtpmap[track.fmt[0]].name],
-                    params: params,
-                    duration: params.duration
-                };
-                return res;
-            }));
-        }
-        return Promise.all(streams).then((tracks)=>{
-
-            if (this.ontracks) {
-                this.ontracks(tracks);
+    async destroy() {
+        if (this.transport) {
+            if (this.client) {
+                await this.client.detachTransport();
             }
-        });
-    }
-
-    onSetup() {
-        this.transitionTo(RTSPClientSM$1.STATE_STREAMS);
-    }
-
-    onRTP(_data) {
-        if (!this.rtpFactory) return;
-
-        let rtp = this.rtpFactory.build(_data.packet, this.sdp);
-        rtp.timestamp -= this.timeOffset[rtp.pt];
-        // Log.debug(rtp);
-        if (rtp.media) {
-            let pay = this.payParser.parse(rtp);
-            if (pay) {
-                this.parent.sampleQueues[rtp.type].push([pay]);
-            }
+            await this.transport.destroy();
         }
-
-        // this.remuxer.feedRTP();
+        if (this.client) {
+            await this.client.destroy();
+        }
+        if (this.remuxer) {
+            this.remuxer.destroy();
+            this.remuxer = null;
+        }
     }
+
 }
-
-const isSafari$1 = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-//navigator.hardwareConcurrency || 3;
 
 setDefaultLogLevel(LogLevel.Debug);
 getTagged("transport:ws").setLevel(LogLevel.Error);
 getTagged("client:rtsp").setLevel(LogLevel.Error);
 
 let wsTransport = {
-    constructor: WebsocketTransport$1,
+    constructor: WebsocketTransport,
     options: {
         socket: "wss://specforge.com/ws/"
     }
@@ -9322,7 +9135,7 @@ let p = new WSPlayer('test_video', {
     // type: wsp.StreamType.RTSP,
     modules: [
         {
-            client: RTSPClient$1,
+            client: RTSPClient,
             transport: wsTransport
         }
     ]
