@@ -60,30 +60,29 @@ If browser can play that source, player will not be initialized for this element
 Setup player in your js:
 
 ```
-import * as wsp from 'wsp/player';
+import * as streamedian from 'streamedian/player.js';
 // import WebsocketTransport from 'wsp/transport/websocket';
 // import RTSPClient from 'wsp/client/rtsp/client';
 
 let mediaElement = rtsp.attach(document.getElementById('test_video'));
-let player = new wsp.WSPlayer(mediaElement, options);
-
-{
+let player = new streamedian.WSPlayer(mediaElement, {
     // url: `${STREAM_URL}`,      // overrides mediaElement's sources
     modules: [
         {
             // client module constructor. Should be subclass or BaseClient. RTSPClient by default
-            // client: RTSPClient, 
+            // client: RTSPClient,
             transport: {
                // client module constructor. Should be subclass or BaseTransport. WebsocketTransport by default
                // constructor: WebsocketTransport,
                options: {
                    // address of websocket proxy described below. ws${location.protocol=='https:'?'s':''}://${location.host}/ws/ by default
-                   socket: "ws://websocket_proxy_address/ws"    
+                   socket: "ws://websocket_proxy_address/ws"
                }
            }
         },
     ]
-}
+});
+
 ```
 
 ES6 Modules support is required. You can use rollup to build this script:
@@ -96,9 +95,9 @@ import alias from 'rollup-plugin-alias';
 const path = require('path');
 
 export default {
-    entry: path.join(__dirname, 'test.js'),
+    entry: path.join(__dirname, 'example.js'),
     targets: [
-        {dest: path.join(__dirname, 'test.bundle.js'), format: 'umd'}
+        {dest: path.join(__dirname, 'example/streamedian.js'), format: 'es'}
     ],
     sourceMap: true,
     plugins: [
@@ -110,7 +109,8 @@ export default {
             bp_logger: path.join(__dirname,'node_modules/bp_logger/logger'),
             bp_event: path.join(__dirname,'node_modules/bp_event/event'),
             bp_statemachine: path.join(__dirname,'node_modules/bp_statemachine/statemachine'),
-            wsp: path.join(__dirname,'node_modules/html5_rtsp_player/src')
+            //jsencrypt: path.join(__dirname,'node_modules/jsencrypt/src/jsencrypt.js'),
+            streamedian: path.join(__dirname,'src')
         })
     ]
 
@@ -126,7 +126,7 @@ export default {
 Include compiled script into your HTML:
 
 ```
-<script src="test.bundle.js"></script>
+<script src="streamedian.js"></script>
 ```
 
 ### Server side
