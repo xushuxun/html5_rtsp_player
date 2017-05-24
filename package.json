@@ -1,6 +1,6 @@
 {
   "name": "streamedian",
-  "version": "0.3.5",
+  "version": "0.3.7",
   "description": "HTML5 MSE RTSP player over websockets",
   "license": "Apache2",
   "author": "Streamedian <streamedian.player@gmail.com> (http://streamedian.com/)",

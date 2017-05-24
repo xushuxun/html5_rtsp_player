@@ -255,6 +255,16 @@ export class MSE {
 
     constructor (players) {
         this.players = players;
+        const playing = this.players.map((video, idx) => {
+            video.onplaying = function () {
+                playing[idx] = true;
+            };
+            video.onpause = function () {
+                playing[idx] = false;
+            };
+            return !video.paused;
+        });
+        this.playing = playing;
         this.mediaSource = new MediaSource();
         this.eventSource = new EventEmitter(this.mediaSource);
         this.reset();
@@ -268,7 +278,11 @@ export class MSE {
     }
 
     play() {
-        this.players.forEach((video)=>{video.play();});
+        this.players.forEach((video, idx)=>{
+            if (video.paused && !this.playing[idx]) {
+                video.play();
+            }
+        });
     }
 
     setLive(is_live) {
@@ -279,9 +293,11 @@ export class MSE {
     }
 
     resetBuffers() {
-        this.players.forEach((video)=>{
-            video.pause();
-            video.currentTime=0;
+        this.players.forEach((video, idx)=>{
+            if (!video.paused && this.playing[idx]) {
+                video.pause();
+                video.currentTime = 0;
+            }
         });
 
         let promises = [];
@@ -331,6 +347,7 @@ export class MSE {
     }
 
     reset() {
+        this.ready = false;
         for (let track in this.buffers) {
             this.buffers[track].destroy();
             delete this.buffers[track];

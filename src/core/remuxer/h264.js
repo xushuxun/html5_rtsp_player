@@ -35,6 +35,8 @@ export class H264Remuxer extends BaseRemuxer {
             samples: []
         };
         this.samples = [];
+        this.lastGopDTS = 0;
+        this.gop=[];
 
         this.h264 = new H264Parser(this);
 
@@ -67,9 +69,21 @@ export class H264Remuxer extends BaseRemuxer {
     }
 
     remux(nalu) {
-        if (this.h264.parseNAL(nalu) && super.remux.call(this, nalu)) {
-            this.mp4track.len += nalu.getSize();
+        if (this.lastGopDTS < nalu.dts) {
+            this.gop.sort((a,b)=>{
+                if (a.dts<b.dts) return -1;
+                if (a.dts>b.dts) return 1;
+                return 0;
+            });
+            for (let unit of this.gop) {
+                if (this.h264.parseNAL(unit) && super.remux.call(this, unit)) {
+                    this.mp4track.len += unit.getSize();
+                }
+            }
+            this.gop = [];
+            this.lastGopDTS = nalu.dts
         }
+        this.gop.push(nalu);
     }
 
     getPayload() {
@@ -102,7 +116,6 @@ export class H264Remuxer extends BaseRemuxer {
             dts = /*Math.round(*/(sample.dts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
             // ensure DTS is not bigger than PTS
             dts = Math.min(pts,dts);
-
             // if not first AVC sample of video track, normalize PTS/DTS with previous sample value
             // and ensure that sample duration is positive
             if (lastDTS !== undefined) {
