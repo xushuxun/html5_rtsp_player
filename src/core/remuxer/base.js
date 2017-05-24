@@ -82,7 +82,7 @@ export class BaseRemuxer {
     init(initPTS, initDTS, shouldInitialize=true) {
         this.initPTS = Math.min(initPTS, this.samples[0].dts - this.unscaled(this.timeOffset));
         this.initDTS = Math.min(initDTS, this.samples[0].dts - this.unscaled(this.timeOffset));
-        Log.debug(`Initial pts=${this.initPTS} dts=${this.initDTS}`);
+        Log.debug(`Initial pts=${this.initPTS} dts=${this.initDTS} offset=${this.unscaled(this.timeOffset)}`);
         this.initialized = shouldInitialize;
     }
 
@@ -92,11 +92,13 @@ export class BaseRemuxer {
         this.mp4track.samples = [];
     }
 
+    static dtsSortFunc(a,b) {
+        return (a.dts-b.dts);
+    }
+
     getPayloadBase(sampleFunction, setupSample) {
         if (!this.readyToDecode || !this.initialized || !this.samples.length) return null;
-        this.samples.sort(function(a, b) {
-            return (a.dts-b.dts);
-        });
+        this.samples.sort(BaseRemuxer.dtsSortFunc);
         return true;
         //
         // let payload = new Uint8Array(this.mp4track.len);

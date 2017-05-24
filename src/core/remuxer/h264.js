@@ -37,6 +37,7 @@ export class H264Remuxer extends BaseRemuxer {
         this.samples = [];
         this.lastGopDTS = 0;
         this.gop=[];
+        this.firstUnit = true;
 
         this.h264 = new H264Parser(this);
 
@@ -69,15 +70,18 @@ export class H264Remuxer extends BaseRemuxer {
     }
 
     remux(nalu) {
+        // console.log(nalu.toString());
         if (this.lastGopDTS < nalu.dts) {
-            this.gop.sort((a,b)=>{
-                if (a.dts<b.dts) return -1;
-                if (a.dts>b.dts) return 1;
-                return 0;
-            });
+            this.gop.sort(BaseRemuxer.dtsSortFunc);
             for (let unit of this.gop) {
-                if (this.h264.parseNAL(unit) && super.remux.call(this, unit)) {
-                    this.mp4track.len += unit.getSize();
+                if (this.h264.parseNAL(unit)){
+                    if (this.firstUnit) {
+                        unit.ntype = 5;//NALU.IDR;
+                        this.firstUnit = false;
+                    }
+                    if (super.remux.call(this, unit)) {
+                        this.mp4track.len += unit.getSize();
+                    }
                 }
             }
             this.gop = [];

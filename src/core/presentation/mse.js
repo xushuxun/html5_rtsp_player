@@ -280,6 +280,7 @@ export class MSE {
     play() {
         this.players.forEach((video, idx)=>{
             if (video.paused && !this.playing[idx]) {
+                Log.debug(`player ${idx}: play`);
                 video.play();
             }
         });

@@ -108,7 +108,7 @@ export class RTSPStream {
         });
     }
 
-    sendPlay(pos = 0) {
+    async sendPlay(pos = 0) {
         this.state = RTSPStream.STATE_PLAY;
         let params = {};
         let range = this.client.sdp.sessionBlock.range;
@@ -119,33 +119,30 @@ export class RTSPStream {
             }
             // params['Range'] = `${range[2]}=${range[0]}-`;
         }
-        return this.sendRequest('PLAY', params).then((_data) => {
-            this.client.useRTPChannel(this.rtpChannel);
-            this.state = RTSPClient.STATE_PLAYING;
-            return {track: this.track, data: _data};
-        });
+        this.client.useRTPChannel(this.rtpChannel);
+        let data = await this.sendRequest('PLAY', params);
+        this.state = RTSPClient.STATE_PLAYING;
+        return {track: this.track, data: data};
     }
 
-    sendPause() {
+    async sendPause() {
         if (!this.client.supports("PAUSE")) {
             return;
         }
         this.state = RTSPClient.STATE_PAUSE;
-        return this.sendRequest("PAUSE").then((_data) => {
-            this.state = RTSPClient.STATE_PAUSED;
-        });
+        await this.sendRequest("PAUSE");
+        this.state = RTSPClient.STATE_PAUSED;
     }
 
-    sendTeardown() {
+    async sendTeardown() {
         if (this.state != RTSPClient.STATE_TEARDOWN) {
             this.client.forgetRTPChannel(this.rtpChannel);
             this.state = RTSPClient.STATE_TEARDOWN;
             this.stopKeepAlive();
-            return this.sendRequest("TEARDOWN").then(() => {
-                Log.log('RTSPClient: STATE_TEARDOWN');
-                ///this.client.connection.disconnect();
-                // TODO: Notify client
-            });
+            await this.sendRequest("TEARDOWN");
+            Log.log('RTSPClient: STATE_TEARDOWN');
+            ///this.client.connection.disconnect();
+            // TODO: Notify client
         }
     }
 }

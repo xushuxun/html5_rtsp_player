@@ -281,9 +281,7 @@ export class RTSPClientSM extends StateMachine {
             CSeq: this.cSeq,
             'User-Agent': RTSPClientSM.USER_AGENT
         });
-        if (/*_host != '*' && this.parent.endpoint.auth*/this.authenticator) {
-            // TODO: DIGEST authentication
-            // _params['Authorization'] = this.authenticator;//`Basic ${btoa(this.parent.endpoint.auth)}`;
+        if (this.authenticator) {
             _params['Authorization'] = this.authenticator(_cmd);
         }
         return this.send(MessageBuilder.build(_cmd, _host, _params, _payload), _cmd).catch((e)=>{
