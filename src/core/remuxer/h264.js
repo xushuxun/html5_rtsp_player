@@ -35,7 +35,7 @@ export class H264Remuxer extends BaseRemuxer {
             samples: []
         };
         this.samples = [];
-        this.lastGopDTS = 0;
+        this.lastGopDTS = -99999999999999;
         this.gop=[];
         this.firstUnit = true;
 
