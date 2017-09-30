@@ -186,9 +186,10 @@ export class WSPlayer {
             }
             let client = this.modules[type].client;
             this.client = new client();
+        } else {
+            this.client.reset();
         }
-
-        this.client.reset();
+        
         if (this.remuxer) {
             this.remuxer.destroy();
             this.remuxer = null;
