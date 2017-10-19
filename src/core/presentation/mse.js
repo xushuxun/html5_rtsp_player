@@ -102,8 +102,17 @@ export class MSEBuffer {
             this.cleaning = true;
             promises.push(new Promise((resolve, reject)=>{
                 this.cleanResolvers.push(resolve);
-                this.sourceBuffer.remove(this.sourceBuffer.buffered.start(i), this.sourceBuffer.buffered.end(i));
-                resolve();
+                if (!this.sourceBuffer.updating) {
+                    this.sourceBuffer.remove(this.sourceBuffer.buffered.start(i), this.sourceBuffer.buffered.end(i));
+                    resolve();
+                } else {
+                    this.sourceBuffer.onupdateend = () => {
+                        if (this.sourceBuffer) {
+                            this.sourceBuffer.remove(this.sourceBuffer.buffered.start(i), this.sourceBuffer.buffered.end(i));
+                        }
+                        resolve();
+                    };
+                }
             }));
         }
         return Promise.all(promises);
