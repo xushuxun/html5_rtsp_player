@@ -114,7 +114,7 @@ export class Remuxer {
         }
         this.initialized = true;
         Promise.all(initmse).then(()=>{
-            this.mse.play();
+            //this.mse.play();
             this.enabled = true;
         });
         
@@ -192,7 +192,7 @@ export class Remuxer {
         this.clientEventSource.on('clear', ()=>{
             this.reset();
             this.mse.clear().then(()=>{
-                this.mse.play();
+                //this.mse.play();
             });
         });
     }
