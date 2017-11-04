@@ -983,8 +983,17 @@ class MSEBuffer {
             this.cleaning = true;
             promises.push(new Promise((resolve, reject)=>{
                 this.cleanResolvers.push(resolve);
-                this.sourceBuffer.remove(this.sourceBuffer.buffered.start(i), this.sourceBuffer.buffered.end(i));
-                resolve();
+                if (!this.sourceBuffer.updating) {
+                    this.sourceBuffer.remove(this.sourceBuffer.buffered.start(i), this.sourceBuffer.buffered.end(i));
+                    resolve();
+                } else {
+                    this.sourceBuffer.onupdateend = () => {
+                        if (this.sourceBuffer) {
+                            this.sourceBuffer.remove(this.sourceBuffer.buffered.start(i), this.sourceBuffer.buffered.end(i));
+                        }
+                        resolve();
+                    };
+                }
             }));
         }
         return Promise.all(promises);
@@ -1136,6 +1145,16 @@ class MSE {
 
     constructor (players) {
         this.players = players;
+        const playing = this.players.map((video, idx) => {
+            video.onplaying = function () {
+                playing[idx] = true;
+            };
+            video.onpause = function () {
+                playing[idx] = false;
+            };
+            return !video.paused;
+        });
+        this.playing = playing;
         this.mediaSource = new MediaSource();
         this.eventSource = new EventEmitter(this.mediaSource);
         this.reset();
@@ -1149,7 +1168,12 @@ class MSE {
     }
 
     play() {
-        this.players.forEach((video)=>{video.play();});
+        this.players.forEach((video, idx)=>{
+            if (video.paused && !this.playing[idx]) {
+                Log$4.debug(`player ${idx}: play`);
+                video.play();
+            }
+        });
     }
 
     setLive(is_live) {
@@ -1160,9 +1184,11 @@ class MSE {
     }
 
     resetBuffers() {
-        this.players.forEach((video)=>{
-            video.pause();
-            video.currentTime=0;
+        this.players.forEach((video, idx)=>{
+            if (!video.paused && this.playing[idx]) {
+                video.pause();
+                video.currentTime = 0;
+            }
         });
 
         let promises = [];
@@ -1212,6 +1238,7 @@ class MSE {
     }
 
     reset() {
+        this.ready = false;
         for (let track in this.buffers) {
             this.buffers[track].destroy();
             delete this.buffers[track];
@@ -1323,9 +1350,9 @@ class BaseRemuxer {
     }
 
     init(initPTS, initDTS, shouldInitialize=true) {
-        this.initPTS = Math.min(initPTS, this.samples[0].dts - this.unscaled(this.timeOffset));
-        this.initDTS = Math.min(initDTS, this.samples[0].dts - this.unscaled(this.timeOffset));
-        Log$5.debug(`Initial pts=${this.initPTS} dts=${this.initDTS}`);
+        this.initPTS = Math.min(initPTS, this.samples[0].dts /*- this.unscaled(this.timeOffset)*/);
+        this.initDTS = Math.min(initDTS, this.samples[0].dts /*- this.unscaled(this.timeOffset)*/);
+        Log$5.debug(`Initial pts=${this.initPTS} dts=${this.initDTS} offset=${this.unscaled(this.timeOffset)}`);
         this.initialized = shouldInitialize;
     }
 
@@ -1335,48 +1362,50 @@ class BaseRemuxer {
         this.mp4track.samples = [];
     }
 
+    static dtsSortFunc(a,b) {
+        return (a.dts-b.dts);
+    }
+
     getPayloadBase(sampleFunction, setupSample) {
         if (!this.readyToDecode || !this.initialized || !this.samples.length) return null;
-        this.samples.sort(function(a, b) {
-            return (a.dts-b.dts);
-        });
+        this.samples.sort(BaseRemuxer.dtsSortFunc);
         return true;
-
-        let payload = new Uint8Array(this.mp4track.len);
-        let offset = 0;
-        let samples=this.mp4track.samples;
-        let mp4Sample, lastDTS, pts, dts;
-
-        while (this.samples.length) {
-            let sample = this.samples.shift();
-            if (sample === null) {
-                // discontinuity
-                this.nextDts = undefined;
-                break;
-            }
-
-            let unit = sample.unit;
-
-            pts = Math.round((sample.pts - this.initDTS)/this.tsAlign)*this.tsAlign;
-            dts = Math.round((sample.dts - this.initDTS)/this.tsAlign)*this.tsAlign;
-            // ensure DTS is not bigger than PTS
-            dts = Math.min(pts, dts);
-
-            // sampleFunction(pts, dts);   // TODO:
-
-            // mp4Sample = setupSample(unit, pts, dts);    // TODO:
-
-            payload.set(unit.getData(), offset);
-            offset += unit.getSize();
-
-            samples.push(mp4Sample);
-            lastDTS = dts;
-        }
-        if (!samples.length) return null;
-
-        // samplesPostFunction(samples); // TODO:
-
-        return new Uint8Array(payload.buffer, 0, this.mp4track.len);
+        //
+        // let payload = new Uint8Array(this.mp4track.len);
+        // let offset = 0;
+        // let samples=this.mp4track.samples;
+        // let mp4Sample, lastDTS, pts, dts;
+        //
+        // while (this.samples.length) {
+        //     let sample = this.samples.shift();
+        //     if (sample === null) {
+        //         // discontinuity
+        //         this.nextDts = undefined;
+        //         break;
+        //     }
+        //
+        //     let unit = sample.unit;
+        //
+        //     pts = Math.round((sample.pts - this.initDTS)/this.tsAlign)*this.tsAlign;
+        //     dts = Math.round((sample.dts - this.initDTS)/this.tsAlign)*this.tsAlign;
+        //     // ensure DTS is not bigger than PTS
+        //     dts = Math.min(pts, dts);
+        //
+        //     // sampleFunction(pts, dts);   // TODO:
+        //
+        //     // mp4Sample = setupSample(unit, pts, dts);    // TODO:
+        //
+        //     payload.set(unit.getData(), offset);
+        //     offset += unit.getSize();
+        //
+        //     samples.push(mp4Sample);
+        //     lastDTS = dts;
+        // }
+        // if (!samples.length) return null;
+        //
+        // // samplesPostFunction(samples); // TODO:
+        //
+        // return new Uint8Array(payload.buffer, 0, this.mp4track.len);
     }
 }
 
@@ -1549,7 +1578,7 @@ class ExpGolomb {
     } else {
       count -= this.bitsAvailable;
       skipBytes = count >> 3;
-      count -= (skipBytes >> 3);
+      count -= (skipBytes << 3);
       this.bytesAvailable -= skipBytes;
       this.loadWord();
       this.word <<= count;
@@ -1753,6 +1782,10 @@ class NALU {
     static get SEI() {return 6;}
     static get SPS() {return 7;}
     static get PPS() {return 8;}
+    static get STAP_A() {return 24;}
+    static get STAP_B() {return 25;}
+    static get FU_A() {return 28;}
+    static get FU_B() {return 29;}
 
     static get TYPES() {return {
         [NALU.IDR]: 'IDR',
@@ -1782,6 +1815,14 @@ class NALU {
 
     appendData(idata) {
         this.data = appendByteArray(this.data, idata);
+    }
+
+    toString() {
+        return `${NALU.type(this)}: NRI: ${this.getNri()}, PTS: ${this.pts}, DTS: ${this.dts}`;
+    }
+
+    getNri() {
+        return this.nri >> 6;
     }
 
     type() {
@@ -1872,6 +1913,9 @@ class H264Parser {
                 // console.log('SEI');
                 break;
             default:
+        }
+        if (unit.nri!=0) {
+            push=true;
         }
         return push;
     }
@@ -2083,6 +2127,9 @@ class H264Remuxer extends BaseRemuxer {
             samples: []
         };
         this.samples = [];
+        this.lastGopDTS = -99999999999999;
+        this.gop=[];
+        this.firstUnit = true;
 
         this.h264 = new H264Parser(this);
 
@@ -2115,8 +2162,23 @@ class H264Remuxer extends BaseRemuxer {
     }
 
     remux(nalu) {
-        if (this.h264.parseNAL(nalu) && super.remux.call(this, nalu)) {
-            this.mp4track.len += nalu.getSize();
+        // console.log(nalu.toString());
+        if (this.lastGopDTS < nalu.dts) {
+            this.gop.sort(BaseRemuxer.dtsSortFunc);
+            for (let unit of this.gop) {
+                // if (this.firstUnit) {
+                //     unit.ntype = 5;//NALU.IDR;
+                //     this.firstUnit = false;
+                // }
+                if (super.remux.call(this, unit)) {
+                    this.mp4track.len += unit.getSize();
+                }
+            }
+            this.gop = [];
+            this.lastGopDTS = nalu.dts;
+        }
+        if (this.h264.parseNAL(nalu)) {
+            this.gop.push(nalu);
         }
     }
 
@@ -2150,7 +2212,6 @@ class H264Remuxer extends BaseRemuxer {
             dts = /*Math.round(*/(sample.dts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
             // ensure DTS is not bigger than PTS
             dts = Math.min(pts,dts);
-
             // if not first AVC sample of video track, normalize PTS/DTS with previous sample value
             // and ensure that sample duration is positive
             if (lastDTS !== undefined) {
@@ -2370,8 +2431,8 @@ class Remuxer {
             initmse.push(this.initMSE(track_type, track.mp4track.codec));
         }
         this.initialized = true;
-        Promise.all(initmse).then(()=>{
-            this.mse.play();
+        return Promise.all(initmse).then(()=>{
+            //this.mse.play();
             this.enabled = true;
         });
         
@@ -2449,7 +2510,7 @@ class Remuxer {
         this.clientEventSource.on('clear', ()=>{
             this.reset();
             this.mse.clear().then(()=>{
-                this.mse.play();
+                //this.mse.play();
             });
         });
     }
@@ -2564,7 +2625,7 @@ class StateMachine {
 const Log$8 = getTagged("parser:sdp");
 
 class SDPParser {
-    constructor(){
+    constructor() {
         this.version = -1;
         this.origin = null;
         this.sessionName = null;
@@ -2577,7 +2638,7 @@ class SDPParser {
 
     parse(content) {
         Log$8.debug(content);
-        return new Promise((resolve, reject)=>{
+        return new Promise((resolve, reject) => {
             var dataString = content;
             var success = true;
             var currentMediaBlock = this.sessionBlock;
@@ -2657,13 +2718,13 @@ class SDPParser {
 
             this.media[currentMediaBlock.type] = currentMediaBlock;
 
-            success?resolve():reject();
+            success ? resolve() : reject();
         });
     }
 
     _parseVersion(line) {
-        var matches = line.match(/^v=([0-9]+)$/);
-        if (0 === matches.length) {
+        let matches = line.match(/^v=([0-9]+)$/);
+        if (!matches || !matches.length) {
             Log$8.log('\'v=\' (Version) formatted incorrectly: ' + line);
             return false;
         }
@@ -2678,26 +2739,26 @@ class SDPParser {
     }
 
     _parseOrigin(line) {
-        var matches = line.match(/^o=([^ ]+) ([0-9]+) ([0-9]+) (IN) (IP4|IP6) ([^ ]+)$/);
-        if (0 === matches.length) {
+        let matches = line.match(/^o=([^ ]+) (-?[0-9]+) (-?[0-9]+) (IN) (IP4|IP6) ([^ ]+)$/);
+        if (!matches || !matches.length) {
             Log$8.log('\'o=\' (Origin) formatted incorrectly: ' + line);
             return false;
         }
 
         this.origin = {};
-        this.origin.username       = matches[1];
-        this.origin.sessionid      = matches[2];
+        this.origin.username = matches[1];
+        this.origin.sessionid = matches[2];
         this.origin.sessionversion = matches[3];
-        this.origin.nettype        = matches[4];
-        this.origin.addresstype    = matches[5];
+        this.origin.nettype = matches[4];
+        this.origin.addresstype = matches[5];
         this.origin.unicastaddress = matches[6];
 
         return true;
     }
 
     _parseSessionName(line) {
-        var matches = line.match(/^s=([^\r\n]+)$/);
-        if (0 === matches.length) {
+        let matches = line.match(/^s=([^\r\n]+)$/);
+        if (!matches || !matches.length) {
             Log$8.log('\'s=\' (Session Name) formatted incorrectly: ' + line);
             return false;
         }
@@ -2708,30 +2769,30 @@ class SDPParser {
     }
 
     _parseTiming(line) {
-        var matches = line.match(/^t=([0-9]+) ([0-9]+)$/);
-        if (0 === matches.length) {
+        let matches = line.match(/^t=([0-9]+) ([0-9]+)$/);
+        if (!matches || !matches.length) {
             Log$8.log('\'t=\' (Timing) formatted incorrectly: ' + line);
             return false;
         }
 
         this.timing = {};
         this.timing.start = matches[1];
-        this.timing.stop  = matches[2];
+        this.timing.stop = matches[2];
 
         return true;
     }
 
     _parseMediaDescription(line, media) {
-        var matches = line.match(/^m=([^ ]+) ([^ ]+) ([^ ]+)[ ]/);
-        if (0 === matches.length) {
+        let matches = line.match(/^m=([^ ]+) ([^ ]+) ([^ ]+)[ ]/);
+        if (!matches || !matches.length) {
             Log$8.log('\'m=\' (Media) formatted incorrectly: ' + line);
             return false;
         }
 
-        media.type  = matches[1];
-        media.port  = matches[2];
+        media.type = matches[1];
+        media.port = matches[2];
         media.proto = matches[3];
-        media.fmt   = line.substr(matches[0].length).split(' ').map(function(fmt, index, array) {
+        media.fmt = line.substr(matches[0].length).split(' ').map(function (fmt, index, array) {
             return parseInt(fmt);
         });
 
@@ -2748,9 +2809,11 @@ class SDPParser {
             return true;
         }
 
-        var matches; /* Used for some cases of below switch-case */
+        var matches;
+        /* Used for some cases of below switch-case */
         var separator = line.indexOf(':');
-        var attribute = line.substr(0, (-1 === separator) ? 0x7FFFFFFF : separator); /* 0x7FF.. is default */
+        var attribute = line.substr(0, (-1 === separator) ? 0x7FFFFFFF : separator);
+        /* 0x7FF.. is default */
 
         switch (attribute) {
             case 'a=recvonly':
@@ -2759,9 +2822,9 @@ class SDPParser {
             case 'a=inactive':
                 media.mode = line.substr('a='.length);
                 break;
-case 'a=range':
+            case 'a=range':
                 matches = line.match(/^a=range:\s*([a-zA-Z-]+)=([0-9.]+|now)\s*-\s*([0-9.]*)$/);
-                media.range= [Number(matches[2]=="now"?-1:matches[2]), Number(matches[3]), matches[1]];
+                media.range = [Number(matches[2] == "now" ? -1 : matches[2]), Number(matches[3]), matches[1]];
                 break;
             case 'a=control':
                 media.control = line.substr('a=control:'.length);
@@ -2778,7 +2841,7 @@ case 'a=range':
                 media.rtpmap[payload] = {};
 
                 var attrs = matches[2].split('/');
-                media.rtpmap[payload].name  = attrs[0].toUpperCase();
+                media.rtpmap[payload].name = attrs[0].toUpperCase();
                 media.rtpmap[payload].clock = attrs[1];
                 if (undefined !== attrs[2]) {
                     media.rtpmap[payload].encparams = attrs[2];
@@ -2946,7 +3009,7 @@ class RTSPStream {
         });
     }
 
-    sendPlay(pos = 0) {
+    async sendPlay(pos = 0) {
         this.state = RTSPStream.STATE_PLAY;
         let params = {};
         let range = this.client.sdp.sessionBlock.range;
@@ -2957,33 +3020,30 @@ class RTSPStream {
             }
             // params['Range'] = `${range[2]}=${range[0]}-`;
         }
-        return this.sendRequest('PLAY', params).then((_data) => {
-            this.client.useRTPChannel(this.rtpChannel);
-            this.state = RTSPClientSM.STATE_PLAYING;
-            return {track: this.track, data: _data};
-        });
+        this.client.useRTPChannel(this.rtpChannel);
+        let data = await this.sendRequest('PLAY', params);
+        this.state = RTSPClientSM.STATE_PLAYING;
+        return {track: this.track, data: data};
     }
 
-    sendPause() {
+    async sendPause() {
         if (!this.client.supports("PAUSE")) {
             return;
         }
         this.state = RTSPClientSM.STATE_PAUSE;
-        return this.sendRequest("PAUSE").then((_data) => {
-            this.state = RTSPClientSM.STATE_PAUSED;
-        });
+        await this.sendRequest("PAUSE");
+        this.state = RTSPClientSM.STATE_PAUSED;
     }
 
-    sendTeardown() {
+    async sendTeardown() {
         if (this.state != RTSPClientSM.STATE_TEARDOWN) {
             this.client.forgetRTPChannel(this.rtpChannel);
             this.state = RTSPClientSM.STATE_TEARDOWN;
             this.stopKeepAlive();
-            return this.sendRequest("TEARDOWN").then(() => {
-                Log$9.log('RTSPClient: STATE_TEARDOWN');
-                ///this.client.connection.disconnect();
-                // TODO: Notify client
-            });
+            await this.sendRequest("TEARDOWN");
+            Log$9.log('RTSPClient: STATE_TEARDOWN');
+            ///this.client.connection.disconnect();
+            // TODO: Notify client
         }
     }
 }
@@ -3419,72 +3479,102 @@ const MessageBuilder = new RTSPMessage(RTSPMessage.RTSP_1_0);
 
 // TODO: asm.js
 class NALUAsm {
-    static get NALTYPE_FU_A() {return 28;}
-    static get NALTYPE_FU_B() {return 29;}
 
     constructor() {
-        this.nalu = null;
+        this.fragmented_nalu = null;
+    }
+
+
+    static parseNALHeader(hdr) {
+        return {
+            nri: hdr & 0x60,
+            type: hdr & 0x1F
+        }
+    }
+
+    parseSingleNALUPacket(rawData, header, dts, pts) {
+        return new NALU(header.type,  header.nri, rawData.subarray(0), dts, pts);
+    }
+
+    parseAggregationPacket(rawData, header, dts, pts) {
+        let data = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
+        let nal_start_idx = 0;
+        let don = null;
+        if (NALU.STAP_B === header.type) {
+            don = data.getUint16(nal_start_idx);
+            nal_start_idx += 2;
+        }
+        let ret = [];
+        while (nal_start_idx < data.byteLength) {
+            let size = data.getUint16(nal_start_idx);
+            nal_start_idx += 2;
+            let header = NALUAsm.parseNALHeader(data.getInt8(nal_start_idx));
+            nal_start_idx++;
+            let nalu = this.parseSingleNALUPacket(rawData.subarray(nal_start_idx, nal_start_idx+size), header, dts, pts);
+            if (nalu !== null) {
+                ret.push(nalu);
+            }
+            nal_start_idx+=size;
+        }
+        return ret;
+    }
+
+    parseFragmentationUnit(rawData, header, dts, pts) {
+        let data = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
+        let nal_start_idx = 0;
+        let fu_header = data.getUint8(nal_start_idx);
+        let is_start = (fu_header & 0x80) >>> 7;
+        let is_end = (fu_header & 0x40) >>> 6;
+        let payload_type = fu_header & 0x1F;
+        let ret = null;
+
+        nal_start_idx++;
+        let don = 0;
+        if (NALU.FU_B === header.type) {
+            don = data.getUint16(nal_start_idx);
+            nal_start_idx += 2;
+        }
+
+        if (is_start) {
+            this.fragmented_nalu = new NALU(payload_type, header.nri, rawData.subarray(nal_start_idx), dts, pts);
+        } else {
+            if (this.fragmented_nalu && this.fragmented_nalu.ntype === payload_type) {
+                this.fragmented_nalu.appendData(rawData.subarray(nal_start_idx));
+
+                if (is_end) {
+                    ret = this.fragmented_nalu;
+                    this.fragmented_nalu = null;
+                    return ret;
+                }
+            }
+        }
+        return null;
     }
 
     onNALUFragment(rawData, dts, pts) {
 
-        var data = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
+        let data = new DataView(rawData.buffer, rawData.byteOffset, rawData.byteLength);
 
-        var nalhdr = data.getUint8(0);
+        let header = NALUAsm.parseNALHeader(data.getUint8(0));
 
-        var nri = nalhdr & 0x60;
-        var naltype = nalhdr & 0x1F;
-        var nal_start_idx = 1;
+        let nal_start_idx = 1;
 
-        if (27 >= naltype && 0 < naltype) {
-            /* This RTP package is a single NALU, dispatch and forget, 0 is undefined */
-            return [new NALU(naltype, nri, rawData.subarray(nal_start_idx), dts, pts)];
-            //return;
-        }
-
-        if (NALUAsm.NALTYPE_FU_A !== naltype && NALUAsm.NALTYPE_FU_B !== naltype) {
+        let unit = null;
+        if (header.type > 0 && header.type < 24) {
+            unit = this.parseSingleNALUPacket(rawData.subarray(nal_start_idx), header, dts, pts);
+        } else if (NALU.FU_A ===  header.type || NALU.FU_B ===  header.type) {
+            unit = this.parseFragmentationUnit(rawData.subarray(nal_start_idx), header, dts, pts);
+        } else if (NALU.STAP_A === header.type || NALU.STAP_B === header.type) {
+            return this.parseAggregationPacket(rawData.subarray(nal_start_idx), header, dts, pts);
+        } else {
             /* 30 - 31 is undefined, ignore those (RFC3984). */
-            Log.log('Undefined NAL unit, type: ' + naltype);
+            Log.log('Undefined NAL unit, type: ' + header.type);
             return null;
         }
-        nal_start_idx++;
-
-        var nalfrag = data.getUint8(1);
-        var nfstart = (nalfrag & 0x80) >>> 7;
-        var nfend = (nalfrag & 0x40) >>> 6;
-        var nftype = nalfrag & 0x1F;
-
-        var nfdon = 0;
-        if (NALUAsm.NALTYPE_FU_B === naltype) {
-            nfdon = data.getUint16(2);
-            nal_start_idx+=2;
+        if (unit) {
+            return [unit];
         }
-
-        if (null === this.nalu || nfstart) {
-            if (!nfstart) {
-                console.log('broken chunk (continuation of lost frame)');
-                return null;
-            }  // Ignore broken chunks
-
-            /* Create a new NAL unit from multiple fragmented NAL units */
-            this.nalu = new NALU(nftype, nri, rawData.subarray(nal_start_idx), dts, pts);
-        } else {
-            if (this.nalu.dts != dts) {
-                // debugger;
-                // Frames lost
-                console.log('broken chunk (continuation of frame with other timestamp)');
-                this.nalu = null;
-                return null;
-            }
-            /* We've already created the NAL unit, append current data */
-            this.nalu.appendData(rawData.subarray(nal_start_idx));
-        }
-
-        if (1 === nfend) {
-            let ret = this.nalu;
-            this.nalu = null;
-            return [ret];
-        }
+        return null;
     }
 }
 
@@ -3732,6 +3822,16 @@ class BaseClient {
     onDisconnected() {
         this.connected = false;
     }
+
+    queryCredentials() {
+        return Promise.resolve();
+    }
+
+    setCredentials(user, password) {
+        this.endpoint.user = user;
+        this.endpoint.pass = password;
+        this.endpoint.auth = `${user}:${password}`;
+    }
 }
 
 class AACParser {
@@ -3864,6 +3964,8 @@ class AuthError extends Error {
         super(msg);
     }
 }
+
+
 
 class RTSPClientSM extends StateMachine {
     static get USER_AGENT() {return 'SFRtsp 0.3';}
@@ -4054,9 +4156,7 @@ class RTSPClientSM extends StateMachine {
             CSeq: this.cSeq,
             'User-Agent': RTSPClientSM.USER_AGENT
         });
-        if (/*_host != '*' && this.parent.endpoint.auth*/this.authenticator) {
-            // TODO: DIGEST authentication
-            // _params['Authorization'] = this.authenticator;//`Basic ${btoa(this.parent.endpoint.auth)}`;
+        if (this.authenticator) {
             _params['Authorization'] = this.authenticator(_cmd);
         }
         return this.send(MessageBuilder.build(_cmd, _host, _params, _payload), _cmd).catch((e)=>{
@@ -8946,6 +9046,7 @@ class WSPlayer {
             }
         };
         this.errorHandler = opts.errorHandler || null;
+        this.queryCredentials = opts.queryCredentials || null;
 
         this.modules = {};
         for (let module of modules) {
@@ -9067,9 +9168,10 @@ class WSPlayer {
             }
             let client = this.modules[type].client;
             this.client = new client();
+        } else {
+            this.client.reset();
         }
-
-        this.client.reset();
+        
         if (this.remuxer) {
             this.remuxer.destroy();
             this.remuxer = null;

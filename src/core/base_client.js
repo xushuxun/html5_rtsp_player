@@ -103,4 +103,14 @@ export class BaseClient {
     onDisconnected() {
         this.connected = false;
     }
+
+    queryCredentials() {
+        return Promise.resolve();
+    }
+
+    setCredentials(user, password) {
+        this.endpoint.user = user;
+        this.endpoint.pass = password;
+        this.endpoint.auth = `${user}:${password}`;
+    }
 }

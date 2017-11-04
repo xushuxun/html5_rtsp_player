@@ -113,7 +113,7 @@ export class Remuxer {
             initmse.push(this.initMSE(track_type, track.mp4track.codec));
         }
         this.initialized = true;
-        Promise.all(initmse).then(()=>{
+        return Promise.all(initmse).then(()=>{
             //this.mse.play();
             this.enabled = true;
         });

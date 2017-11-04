@@ -65,6 +65,7 @@ export class WSPlayer {
             }
         };
         this.errorHandler = opts.errorHandler || null;
+        this.queryCredentials = opts.queryCredentials || null;
 
         this.modules = {};
         for (let module of modules) {

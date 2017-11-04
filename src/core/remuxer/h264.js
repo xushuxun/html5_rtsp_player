@@ -74,20 +74,20 @@ export class H264Remuxer extends BaseRemuxer {
         if (this.lastGopDTS < nalu.dts) {
             this.gop.sort(BaseRemuxer.dtsSortFunc);
             for (let unit of this.gop) {
-                if (this.h264.parseNAL(unit)){
-                    if (this.firstUnit) {
-                        unit.ntype = 5;//NALU.IDR;
-                        this.firstUnit = false;
-                    }
-                    if (super.remux.call(this, unit)) {
-                        this.mp4track.len += unit.getSize();
-                    }
+                // if (this.firstUnit) {
+                //     unit.ntype = 5;//NALU.IDR;
+                //     this.firstUnit = false;
+                // }
+                if (super.remux.call(this, unit)) {
+                    this.mp4track.len += unit.getSize();
                 }
             }
             this.gop = [];
             this.lastGopDTS = nalu.dts
         }
-        this.gop.push(nalu);
+        if (this.h264.parseNAL(nalu)) {
+            this.gop.push(nalu);
+        }
     }
 
     getPayload() {

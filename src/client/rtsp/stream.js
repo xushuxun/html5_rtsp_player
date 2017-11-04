@@ -2,6 +2,7 @@ import {getTagged} from '../../deps/bp_logger.js';
 
 import {RTSPClientSM as RTSPClient} from './client.js';
 import {Url} from '../../core/util/url.js';
+import {RTSPError} from "./client";
 
 const LOG_TAG = "rtsp:stream";
 const Log = getTagged(LOG_TAG);

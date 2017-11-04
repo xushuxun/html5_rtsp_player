@@ -92,6 +92,13 @@ class AuthError extends Error {
     }
 }
 
+export class RTSPError extends Error {
+    constructor(data) {
+        super(data.msg);
+        this.data = data;
+    }
+}
+
 export class RTSPClientSM extends StateMachine {
     static get USER_AGENT() {return 'SFRtsp 0.3';}
     static get STATE_INITIAL() {return  1 << 0;}

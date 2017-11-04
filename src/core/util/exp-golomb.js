@@ -41,7 +41,7 @@ export class ExpGolomb {
     } else {
       count -= this.bitsAvailable;
       skipBytes = count >> 3;
-      count -= (skipBytes >> 3);
+      count -= (skipBytes << 3);
       this.bytesAvailable -= skipBytes;
       this.loadWord();
       this.word <<= count;

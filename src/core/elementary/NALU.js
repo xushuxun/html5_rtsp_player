@@ -7,6 +7,8 @@ export class NALU {
     static get SEI() {return 6;}
     static get SPS() {return 7;}
     static get PPS() {return 8;}
+    static get STAP_A() {return 24;}
+    static get STAP_B() {return 25;}
     static get FU_A() {return 28;}
     static get FU_B() {return 29;}
 

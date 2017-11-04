@@ -80,8 +80,8 @@ export class BaseRemuxer {
     }
 
     init(initPTS, initDTS, shouldInitialize=true) {
-        this.initPTS = Math.min(initPTS, this.samples[0].dts - this.unscaled(this.timeOffset));
-        this.initDTS = Math.min(initDTS, this.samples[0].dts - this.unscaled(this.timeOffset));
+        this.initPTS = Math.min(initPTS, this.samples[0].dts /*- this.unscaled(this.timeOffset)*/);
+        this.initDTS = Math.min(initDTS, this.samples[0].dts /*- this.unscaled(this.timeOffset)*/);
         Log.debug(`Initial pts=${this.initPTS} dts=${this.initDTS} offset=${this.unscaled(this.timeOffset)}`);
         this.initialized = shouldInitialize;
     }
