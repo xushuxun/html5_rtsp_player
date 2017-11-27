@@ -1,19 +1,31 @@
-// import babel from 'rollup-plugin-babel';
-import buble from 'rollup-plugin-buble';
+import babel from 'rollup-plugin-babel';
 import alias from 'rollup-plugin-alias';
+import async from 'rollup-plugin-async';
+import uglify from 'rollup-plugin-uglify';
 
 const path = require('path');
 
 export default {
-    entry: path.join(__dirname, 'example.js'),
+    entry: path.join(__dirname, 'streamedian.js'),
     targets: [
-        {dest: path.join(__dirname, 'example/streamedian.js'), format: 'es'}
+        {
+            dest: path.join(__dirname, 'example/streamedian.min.js'),
+            format: 'iife',
+            moduleName: 'Streamedian'
+        }
     ],
     sourceMap: true,
     plugins: [
-        //buble({
-            //exclude: 'node_modules/**'
-        //}),
+        async(),
+        babel({
+            // exclude: 'node_modules/**',
+            // presets: [
+            //     'es2015-rollup', "stage-0"
+            // ]
+        }),
+        uglify({
+            mangle: false
+        }),
         alias({
             bp_logger: path.join(__dirname,'node_modules/bp_logger/logger.js'),
             bp_event: path.join(__dirname,'node_modules/bp_event/event.js'),

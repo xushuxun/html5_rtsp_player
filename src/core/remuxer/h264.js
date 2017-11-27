@@ -70,7 +70,6 @@ export class H264Remuxer extends BaseRemuxer {
     }
 
     remux(nalu) {
-        // console.log(nalu.toString());
         if (this.lastGopDTS < nalu.dts) {
             this.gop.sort(BaseRemuxer.dtsSortFunc);
             for (let unit of this.gop) {
@@ -116,8 +115,8 @@ export class H264Remuxer extends BaseRemuxer {
 
             let unit = sample.unit;
             
-            pts = /*Math.round(*/(sample.pts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
-            dts = /*Math.round(*/(sample.dts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
+            pts = sample.pts; // /*Math.round(*/(sample.pts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
+            dts = sample.dts; ///*Math.round(*/(sample.dts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
             // ensure DTS is not bigger than PTS
             dts = Math.min(pts,dts);
             // if not first AVC sample of video track, normalize PTS/DTS with previous sample value
@@ -125,7 +124,7 @@ export class H264Remuxer extends BaseRemuxer {
             if (lastDTS !== undefined) {
                 let sampleDuration = this.scaled(dts - lastDTS);
                 // Log.debug(`Sample duration: ${sampleDuration}`);
-                if (sampleDuration <= 0) {
+                if (sampleDuration < 0) {
                     Log.log(`invalid AVC sample duration at PTS/DTS: ${pts}/${dts}|lastDTS: ${lastDTS}:${sampleDuration}`);
                     this.mp4track.len -= unit.getSize();
                     continue;
@@ -199,7 +198,7 @@ export class H264Remuxer extends BaseRemuxer {
             mp4Sample.duration = this.lastSampleDuration;
         }
 
-        if(samples.length && (!this.nextDts /*|| navigator.userAgent.toLowerCase().indexOf('chrome') > -1*/)) {
+        if(samples.length && (!this.nextDts || navigator.userAgent.toLowerCase().indexOf('chrome') > -1)) {
             let flags = samples[0].flags;
             // chrome workaround, mark first sample as being a Random Access Point to avoid sourcebuffer append issue
             // https://code.google.com/p/chromium/issues/detail?id=229412

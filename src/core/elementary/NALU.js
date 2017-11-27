@@ -43,11 +43,11 @@ export class NALU {
     }
 
     toString() {
-        return `${NALU.type(this)}: NRI: ${this.getNri()}, PTS: ${this.pts}, DTS: ${this.dts}`;
+        return `${NALU.type(this)}(${this.data.byteLength}): NRI: ${this.getNri()}, PTS: ${this.pts}, DTS: ${this.dts}`;
     }
 
     getNri() {
-        return this.nri >> 6;
+        return this.nri >> 5;
     }
 
     type() {

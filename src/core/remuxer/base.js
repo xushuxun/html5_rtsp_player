@@ -43,10 +43,6 @@ export class BaseRemuxer {
         this.tsAlign = 1;
     }
 
-    shifted(timestamp) {
-        return timestamp - this.timeOffset;
-    }
-
     scaled(timestamp) {
         return timestamp / this.scaleFactor;
     }
@@ -56,11 +52,11 @@ export class BaseRemuxer {
     }
 
     remux(unit) {
-        if (unit && this.timeOffset >= 0) {
+        if (unit) {
             this.samples.push({
                 unit: unit,
-                pts: this.shifted(unit.pts),
-                dts: this.shifted(unit.dts)
+                pts: unit.pts,
+                dts: unit.dts
             });
             return true;
         }

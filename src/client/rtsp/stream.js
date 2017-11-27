@@ -65,9 +65,13 @@ export class RTSPStream {
     }
 
     sendKeepalive() {
-        return this.client.sendRequest('GET_PARAMETER', this.getSetupURL(this.track), {
-            'Session': this.session
-        });
+        if (this.client.methods.includes('GET_PARAMETER')) {
+            return this.client.sendRequest('GET_PARAMETER', this.getSetupURL(this.track), {
+                'Session': this.session
+            });
+        } else {
+            return this.client.sendRequest('OPTIONS', '*');
+        }
     }
 
     stopKeepAlive() {
@@ -78,6 +82,11 @@ export class RTSPStream {
         this.keepaliveInterval = setInterval(() => {
             this.sendKeepalive().catch((e) => {
                 Log.error(e);
+                if (e instanceof RTSPError) {
+                    if (Number(e.data.parsed.code) == 501) {
+                        return;
+                    }
+                }
                 this.client.reconnect();
             });
         }, 30000);
@@ -101,6 +110,13 @@ export class RTSPStream {
             'Date': new Date().toUTCString()
         }).then((_data) => {
             this.session = _data.headers['session'];
+            let transport = _data.headers['transport'];
+            if (transport) {
+                let interleaved = transport.match(/interleaved=([0-9]+)-([0-9]+)/)[1];
+                if (interleaved) {
+                    this.rtpChannel = Number(interleaved);
+                }
+            }
             /*if (!/RTP\/AVP\/TCP;unicast;interleaved=/.test(_data.headers["transport"])) {
                 // TODO: disconnect stream and notify client
                 throw new Error("Connection broken");

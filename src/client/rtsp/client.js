@@ -194,14 +194,15 @@ export class RTSPClientSM extends StateMachine {
         }
     }
 
-    onDisconnected() {
+    async onDisconnected() {
         this.reset();
         this.shouldReconnect = true;
-        return this.transitionTo(RTSPClientSM.STATE_TEARDOWN);
+        await this.transitionTo(RTSPClientSM.STATE_TEARDOWN);
+        await this.transitionTo(RTSPClientSM.STATE_INITIAL);
     }
 
     start() {
-        if (this.state != RTSPClientSM.STATE_STREAMS) {
+        if (this.currentState.name !== RTSPClientSM.STATE_STREAMS) {
             return this.transitionTo(RTSPClientSM.STATE_OPTIONS);
         } else {
             // TODO: seekable
@@ -233,6 +234,7 @@ export class RTSPClientSM extends StateMachine {
         this.authenticator = '';
         this.methods = [];
         this.tracks = [];
+        this.rtpBuffer={};
         for (let stream in this.streams) {
             this.streams[stream].reset();
         }
@@ -246,11 +248,11 @@ export class RTSPClientSM extends StateMachine {
         } else {
             await this.transitionTo(RTSPClientSM.STATE_INITIAL);
         }
-        this.state = RTSPClientSM.STATE_INITIAL;
         this.sdp = null;
         this.interleaveChannelIndex = 0;
         this.session = null;
         this.timeOffset = {};
+        this.lastTimestamp = {};
     }
 
     async reconnect() {
@@ -300,49 +302,60 @@ export class RTSPClientSM extends StateMachine {
         });
     }
 
-    send(_data, _method) {
+    async send(_data, _method) {
         if (this.transport) {
-            return this.transport.ready.then(() => {
-                Log.debug(_data);
-                return this.transport.send(_data).then(this.parse.bind(this)).then((parsed) => {
-                    // TODO: parse status codes
-                    if (parsed.code == 401 && !this.authenticator ) {
-                        Log.debug(parsed.headers['www-authenticate']);
-                        let auth = parsed.headers['www-authenticate'];
-                        let method = auth.substring(0, auth.indexOf(' '));
-                        auth = auth.substr(method.length+1);
-                        let chunks = auth.split(',');
-                        if (method.toLowerCase() == 'digest') {
-                            let parsedChunks = {};
-                            for (let chunk of chunks) {
-                                let c = chunk.trim();
-                                let [k,v] = c.split('=');
-                                parsedChunks[k] = v.substr(1, v.length-2);
-                            }
-                            this.authenticator = (_method)=>{
-                                let ep = this.parent.endpoint;
-                                let ha1 = md5(`${ep.user}:${parsedChunks.realm}:${ep.pass}`);
-                                let ha2 = md5(`${_method}:${ep.urlpath}`);
-                                let response = md5(`${ha1}:${parsedChunks.nonce}:${ha2}`);
-                                let tail=''; // TODO: handle other params
-                                return `Digest username="${ep.user}", nonce="${parsedChunks.nonce}", uri="${ep.urlpath}", response="${response}"${tail}`;
-                            }
-                        } else {
-                            this.authenticator = ()=>{return `Basic ${btoa(this.parent.endpoint.auth)}`;};
-                        }
-
-                        throw new AuthError(parsed);
-                    }
-                    if (parsed.code >= 300) {
-                        Log.error(parsed.statusLine);
-                        throw new Error(`RTSP error: ${parsed.code} ${parsed.statusLine}`);
-                    }
-                    return parsed;
-                });
-            }).catch((e)=>{
-                this.onDisconnected.bind(this);
+            try {
+                await this.transport.ready;
+            } catch(e) {
+                this.onDisconnected();
                 throw e;
-            });
+            }
+            Log.debug(_data);
+            let response = await this.transport.send(_data);
+            let parsed = this.parse(response);
+            // TODO: parse status codes
+            if (parsed.code == 401 /*&& !this.authenticator */) {
+                Log.debug(parsed.headers['www-authenticate']);
+                let auth = parsed.headers['www-authenticate'];
+                let method = auth.substring(0, auth.indexOf(' '));
+                auth = auth.substr(method.length+1);
+                let chunks = auth.split(',');
+
+                let ep = this.parent.endpoint;
+                if (!ep.user || !ep.pass) {
+                    try {
+                        await this.parent.queryCredentials.call(this.parent);
+                    } catch (e) {
+                        throw new AuthError();
+                    }
+                }
+
+                if (method.toLowerCase() == 'digest') {
+                    let parsedChunks = {};
+                    for (let chunk of chunks) {
+                        let c = chunk.trim();
+                        let [k,v] = c.split('=');
+                        parsedChunks[k] = v.substr(1, v.length-2);
+                    }
+                    this.authenticator = (_method)=>{
+                        let ep = this.parent.endpoint;
+                        let ha1 = md5(`${ep.user}:${parsedChunks.realm}:${ep.pass}`);
+                        let ha2 = md5(`${_method}:${ep.urlpath}`);
+                        let response = md5(`${ha1}:${parsedChunks.nonce}:${ha2}`);
+                        let tail=''; // TODO: handle other params
+                        return `Digest username="${ep.user}", nonce="${parsedChunks.nonce}", uri="${ep.urlpath}", response="${response}"${tail}`;
+                    }
+                } else {
+                    this.authenticator = ()=>{return `Basic ${btoa(this.parent.endpoint.auth)}`;};
+                }
+
+                throw new AuthError(parsed);
+            }
+            if (parsed.code >= 300) {
+                Log.error(parsed.statusLine);
+                throw new RTSPError({msg: `RTSP error: ${parsed.code} ${parsed.statusLine}`, parsed: parsed});
+            }
+            return parsed;
         } else {
             return Promise.reject("No transport attached");
         }
@@ -372,7 +385,7 @@ export class RTSPClientSM extends StateMachine {
     }
 
     onDescribe(data) {
-        this.contentBase = data.headers['content-base'] || `${this.endpoint.protocol}://${this.endpoint.location}${this.url}/`;
+        this.contentBase = data.headers['content-base'] || this.url;// `${this.endpoint.protocol}://${this.endpoint.location}${this.endpoint.urlpath}/`;
         this.tracks = this.sdp.getMediaBlockList();
         this.rtpFactory = new RTPFactory(this.sdp);
 
@@ -403,15 +416,21 @@ export class RTSPClientSM extends StateMachine {
             this.streams[track_type] = new RTSPStream(this, track);
             let playPromise = this.streams[track_type].start();
             this.parent.sampleQueues[PayloadType.string_map[track.rtpmap[track.fmt[0]].name]]=[];
+            this.rtpBuffer[track.fmt[0]]=[];
             streams.push(playPromise.then(({track, data})=>{
                 let timeOffset = 0;
+                this.timeOffset[track.fmt[0]] = 0;
                 try {
                     let rtp_info = data.headers["rtp-info"].split(';');
-                    this.timeOffset[track.fmt[0]] = Number(rtp_info[rtp_info.length - 1].split("=")[1]) ;
+                    for (let chunk of rtp_info) {
+                        let [key, val] = chunk.split("=");
+                        if (key === "rtptime") {
+                            this.timeOffset[track.fmt[0]] = Number(val);
+                        }
+                    }
                 } catch (e) {
-                    this.timeOffset[track.fmt[0]] = new Date().getTime();
+                    // new Date().getTime();
                 }
-
                 let params = {
                     timescale: 0,
                     scaleFactor: 0
@@ -443,7 +462,7 @@ export class RTSPClientSM extends StateMachine {
                 this.parent.seekable = (params.duration > 1);
                 let res = {
                     track: track,
-                    offset: timeOffset,
+                    offset: this.timeOffset[track.fmt[0]],
                     type: PayloadType.string_map[track.rtpmap[track.fmt[0]].name],
                     params: params,
                     duration: params.duration
@@ -452,10 +471,12 @@ export class RTSPClientSM extends StateMachine {
             }));
         }
         return Promise.all(streams).then((tracks)=>{
-
             if (this.ontracks) {
                 this.ontracks(tracks);
             }
+        }).catch(()=>{
+            this.stop();
+            this.reset();
         });
     }
 
@@ -467,16 +488,41 @@ export class RTSPClientSM extends StateMachine {
         if (!this.rtpFactory) return;
 
         let rtp = this.rtpFactory.build(_data.packet, this.sdp);
-        rtp.timestamp -= this.timeOffset[rtp.pt];
-        // Log.debug(rtp);
-        if (rtp.media) {
-            let pay = this.payParser.parse(rtp);
-            if (pay) {
-                // if (typeof pay == typeof []) {
-                this.parent.sampleQueues[rtp.type].push(pay);
-                // } else {
-                //     this.parent.sampleQueues[rtp.type].push([pay]);
-                // }
+
+        if (!rtp.type) {
+            return;
+        }
+
+        if (this.timeOffset[rtp.pt] === undefined) {
+            console.log(rtp.pt, this.timeOffset[rtp.pt]);
+            this.rtpBuffer[rtp.pt].push(rtp);
+            return;
+        }
+
+        if (this.lastTimestamp[rtp.pt] === undefined) {
+            this.lastTimestamp[rtp.pt] = rtp.timestamp-this.timeOffset[rtp.pt];
+        }
+
+        let queue = this.rtpBuffer[rtp.pt];
+        queue.push(rtp);
+
+        while (queue.length) {
+            let rtp = queue.shift();
+
+            rtp.timestamp = rtp.timestamp-this.timeOffset[rtp.pt]-this.lastTimestamp[rtp.pt];
+            // TODO: overflow
+            // if (rtp.timestamp < 0) {
+            //     rtp.timestamp = (rtp.timestamp + Number.MAX_SAFE_INTEGER) % 0x7fffffff;
+            // }
+            if (rtp.media) {
+                let pay = this.payParser.parse(rtp);
+                if (pay) {
+                    // if (typeof pay == typeof []) {
+                    this.parent.sampleQueues[rtp.type].push(pay);
+                    // } else {
+                    //     this.parent.sampleQueues[rtp.type].push([pay]);
+                    // }
+                }
             }
         }
 

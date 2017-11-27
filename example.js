@@ -15,7 +15,7 @@ let wsTransport = {
     }
 };
 
-let p = new streamedian.WSPlayer('test_video', {
+window.StreamedianPlayer = new streamedian.WSPlayer('test_video', {
     // url: `${STREAM_UNIX}${STREAM_URL}`,
     // type: wsp.StreamType.RTSP,
     modules: [
@@ -23,5 +23,19 @@ let p = new streamedian.WSPlayer('test_video', {
             client: RTSPClient,
             transport: wsTransport
         }
-    ]
+    ],
+    errorHandler (e){
+        alert(`Failed to start player: ${e.message}`);
+    },
+    queryCredentials(client) {
+        return new Promise((resolve, reject)=>{
+            let c = prompt('input credentials in format user:password');
+            if (c) {
+                this.setCredentials.apply(this, c.split(':'));
+                resolve();
+            } else {
+                reject();
+            }
+        });
+    }
 });

@@ -190,7 +190,10 @@ export class WSPlayer {
         } else {
             this.client.reset();
         }
-        
+
+        if (this.queryCredentials) {
+            this.client.queryCredentials = this.queryCredentials;
+        }
         if (this.remuxer) {
             this.remuxer.destroy();
             this.remuxer = null;

@@ -68,7 +68,7 @@ export class H264Parser {
                 break;
             default:
         }
-        if (unit.nri!=0) {
+        if (unit.getNri() > 0 ) {
             push=true;
         }
         return push;

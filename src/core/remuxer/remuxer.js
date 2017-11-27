@@ -36,20 +36,23 @@ export class Remuxer {
         this.errorListener = this.mseClose.bind(this);
         this.closeListener = this.mseClose.bind(this);
 
-        this.mseEventSource.on('error', this.errorListener);
-        this.mseEventSource.on('sourceclosed', this.closeListener);
-        
         this.eventSource.addEventListener('ready', this.init.bind(this));
     }
 
-    reset() {
+    initMSEHandlers() {
+        this.mseEventSource.on('error', this.errorListener);
+        this.mseEventSource.on('sourceclosed', this.closeListener);
+    }
+
+    async reset() {
         this.tracks = {};
         this.initialized = false;
         this.initSegments = {};
         this.codecs = [];
         this.streams = {};
         this.enabled = false;
-        this.mse.clear();
+        await this.mse.clear();
+        this.initMSEHandlers();
     }
 
     destroy() {
@@ -134,11 +137,13 @@ export class Remuxer {
 
     mseClose() {
         // this.mse.clear();
+        this.client.stop();
         this.eventSource.dispatchEvent('stopped');
     }
 
     flush() {
         this.onSamples();
+
         if (!this.initialized) {
             if (Object.keys(this.tracks).length) {
                 for (let track_type in this.tracks) {
@@ -193,6 +198,7 @@ export class Remuxer {
             this.reset();
             this.mse.clear().then(()=>{
                 //this.mse.play();
+                this.initMSEHandlers();
             });
         });
     }
