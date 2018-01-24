@@ -16,7 +16,7 @@ export class SDPParser {
     }
 
     parse(content) {
-        Log.debug(content);
+        // Log.debug(content);
         return new Promise((resolve, reject) => {
             var dataString = content;
             var success = true;

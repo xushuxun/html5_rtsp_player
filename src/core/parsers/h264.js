@@ -39,15 +39,15 @@ export class H264Parser {
     parseNAL(unit) {
         if (!unit) return false;
         
-        let push = false;
+        let push = null;
+        // console.log(unit.toString());
         switch (unit.type()) {
             case NALU.NDR:
-                push = true;
-                break;
             case NALU.IDR:
                 push = true;
                 break;
             case NALU.PPS:
+                push = false;
                 if (!this.track.pps) {
                     this.parsePPS(unit.getData().subarray(4));
                     if (!this.remuxer.readyToDecode && this.track.pps && this.track.sps) {
@@ -56,6 +56,7 @@ export class H264Parser {
                 }
                 break;
             case NALU.SPS:
+                push = false;
                 if(!this.track.sps) {
                     this.parseSPS(unit.getData().subarray(4));
                     if (!this.remuxer.readyToDecode && this.track.pps && this.track.sps) {
@@ -64,11 +65,34 @@ export class H264Parser {
                 }
                 break;
             case NALU.SEI:
-                // console.log('SEI');
+                push = false;
+                let data = new DataView(unit.data.buffer, unit.data.byteOffset, unit.data.byteLength);
+                let byte_idx = 0;
+                let pay_type = data.getUint8(byte_idx);
+                ++byte_idx;
+                let pay_size = 0;
+                let sz = data.getUint8(byte_idx);
+                ++byte_idx;
+                while (sz === 255) {
+                    pay_size+=sz;
+                    sz = data.getUint8(byte_idx);
+                    ++byte_idx;
+                }
+                pay_size+=sz;
+
+                let uuid = unit.data.subarray(byte_idx, byte_idx+16);
+                byte_idx+=16;
+                console.log(`PT: ${pay_type}, PS: ${pay_size}, UUID: ${Array.from(uuid).map(function(i) {
+                    return ('0' + i.toString(16)).slice(-2);
+                }).join('')}`);
+                // debugger;
                 break;
+            case NALU.EOSEQ:
+            case NALU.EOSTR:
+                push = false;
             default:
         }
-        if (unit.getNri() > 0 ) {
+        if (push === null && unit.getNri() > 0 ) {
             push=true;
         }
         return push;

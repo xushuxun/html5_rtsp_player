@@ -66,7 +66,7 @@ export class Remuxer {
     }
 
     onTracks(tracks) {
-        Log.debug(tracks.detail);
+        Log.debug(`ontracks: `, tracks.detail);
         // store available track types
         for (let track of tracks.detail) {
             this.tracks[track.type] = new Remuxer.TrackConverters[track.type](Remuxer.TrackTimescale[track.type], Remuxer.TrackScaleFactor[track.type], track.params);
@@ -145,13 +145,16 @@ export class Remuxer {
         this.onSamples();
 
         if (!this.initialized) {
+            // Log.debug(`Initialize...`);
             if (Object.keys(this.tracks).length) {
                 for (let track_type in this.tracks) {
                     if (!this.tracks[track_type].readyToDecode || !this.tracks[track_type].samples.length) return;
+                    Log.debug(`Init MSE for track ${this.tracks[track_type].mp4track.type}`);
                 }
                 this.eventSource.dispatchEvent('ready');
             }
         } else {
+
             for (let track_type in this.tracks) {
                 let track = this.tracks[track_type];
                 let pay = track.getPayload();

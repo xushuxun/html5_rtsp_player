@@ -11,6 +11,7 @@ import {BaseClient} from '../../core/base_client.js';
 import {PayloadType} from '../../core/defs.js';
 import {base64ToArrayBuffer, hexToByteArray} from '../../core/util/binary.js';
 import {AACParser} from '../../core/parsers/aac.js';
+import {RTSPSession} from "./session";
 
 const LOG_TAG = "client:rtsp";
 const Log = getTagged(LOG_TAG);
@@ -107,6 +108,10 @@ export class RTSPClientSM extends StateMachine {
     static get STATE_SETUP() {return  1 << 3;}
     static get STATE_STREAMS() {return 1 << 4;}
     static get STATE_TEARDOWN() {return  1 << 5;}
+    static get STATE_PLAY() {return  1 << 6;}
+    static get STATE_PLAYING() {return  1 << 7;}
+    static get STATE_PAUSE() {return  1 << 8;}
+    static get STATE_PAUSED() {return  1 << 9;}
     // static STATE_PAUSED = 1 << 6;
 
     constructor(parent) {
@@ -116,6 +121,7 @@ export class RTSPClientSM extends StateMachine {
         this.transport = null;
         this.payParser = new RTPPayloadParser();
         this.rtp_channels = new Set();
+        this.sessions = {};
         this.ontracks = null;
 
         this.addState(RTSPClientSM.STATE_INITIAL,{
@@ -238,7 +244,11 @@ export class RTSPClientSM extends StateMachine {
         for (let stream in this.streams) {
             this.streams[stream].reset();
         }
+        for (let session in this.sessions) {
+            this.sessions[session].reset();
+        }
         this.streams={};
+        this.sessions={};
         this.contentBase = "";
         if (this.currentState) {
             if (this.currentState.name != RTSPClientSM.STATE_INITIAL) {
@@ -414,10 +424,10 @@ export class RTSPClientSM extends StateMachine {
             if (!PayloadType.string_map[track.rtpmap[track.fmt[0]].name]) continue;
 
             this.streams[track_type] = new RTSPStream(this, track);
-            let playPromise = this.streams[track_type].start();
+            let setupPromise = this.streams[track_type].start();
             this.parent.sampleQueues[PayloadType.string_map[track.rtpmap[track.fmt[0]].name]]=[];
             this.rtpBuffer[track.fmt[0]]=[];
-            streams.push(playPromise.then(({track, data})=>{
+            streams.push(setupPromise.then(({track, data})=>{
                 let timeOffset = 0;
                 this.timeOffset[track.fmt[0]] = 0;
                 try {
@@ -425,7 +435,7 @@ export class RTSPClientSM extends StateMachine {
                     for (let chunk of rtp_info) {
                         let [key, val] = chunk.split("=");
                         if (key === "rtptime") {
-                            this.timeOffset[track.fmt[0]] = Number(val);
+                            this.timeOffset[track.fmt[0]] = 0;//Number(val);
                         }
                     }
                 } catch (e) {
@@ -467,14 +477,26 @@ export class RTSPClientSM extends StateMachine {
                     params: params,
                     duration: params.duration
                 };
+                console.log(res, this.timeOffset);
+                let session = data.headers.session.split(';')[0];
+                if (!this.sessions[session]) {
+                    this.sessions[session] = new RTSPSession(this, session);
+                }
                 return res;
             }));
         }
         return Promise.all(streams).then((tracks)=>{
-            if (this.ontracks) {
-                this.ontracks(tracks);
+            let sessionPromises = [];
+            for (let session in this.sessions) {
+                sessionPromises.push(this.sessions[session].start());
             }
-        }).catch(()=>{
+            return Promise.all(sessionPromises).then(()=>{
+                if (this.ontracks) {
+                    this.ontracks(tracks);
+                }
+            })
+        }).catch((e)=>{
+            console.error(e);
             this.stop();
             this.reset();
         });
@@ -488,13 +510,12 @@ export class RTSPClientSM extends StateMachine {
         if (!this.rtpFactory) return;
 
         let rtp = this.rtpFactory.build(_data.packet, this.sdp);
-
         if (!rtp.type) {
             return;
         }
 
         if (this.timeOffset[rtp.pt] === undefined) {
-            console.log(rtp.pt, this.timeOffset[rtp.pt]);
+            //console.log(rtp.pt, this.timeOffset[rtp.pt]);
             this.rtpBuffer[rtp.pt].push(rtp);
             return;
         }
@@ -525,7 +546,6 @@ export class RTSPClientSM extends StateMachine {
                 }
             }
         }
-
         // this.remuxer.feedRTP();
     }
 }

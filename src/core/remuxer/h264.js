@@ -115,8 +115,8 @@ export class H264Remuxer extends BaseRemuxer {
 
             let unit = sample.unit;
             
-            pts = sample.pts; // /*Math.round(*/(sample.pts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
-            dts = sample.dts; ///*Math.round(*/(sample.dts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
+            pts = sample.pts- this.initDTS; // /*Math.round(*/(sample.pts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
+            dts = sample.dts - this.initDTS; ///*Math.round(*/(sample.dts - this.initDTS)/*/this.tsAlign)*this.tsAlign*/;
             // ensure DTS is not bigger than PTS
             dts = Math.min(pts,dts);
             // if not first AVC sample of video track, normalize PTS/DTS with previous sample value
