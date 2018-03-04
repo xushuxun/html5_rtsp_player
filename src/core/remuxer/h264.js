@@ -42,10 +42,20 @@ export class H264Remuxer extends BaseRemuxer {
         this.h264 = new H264Parser(this);
 
         if (params.sps) {
-            this.setSPS(new Uint8Array(params.sps));
+            let arr = new Uint8Array(params.sps);
+            if ((arr[0] & 0x1f) === 7) {
+                this.setSPS(arr);
+            } else {
+                Log.warn("bad SPS in SDP")
+            }
         }
         if (params.pps) {
-            this.setPPS(new Uint8Array(params.pps));
+            let arr = new Uint8Array(params.pps);
+            if ((arr[0] & 0x1f) === 8) {
+                this.setPPS(arr);
+            } else {
+                Log.warn("bad PPS in SDP")
+            }
         }
 
         if (this.mp4track.pps && this.mp4track.sps) {

@@ -43,7 +43,7 @@ export class Url {
     }
 
     static full(parsed) {
-        return `${parsed.protocol}://${parsed.auth?parsed.auth+'@':''}${parsed.location}/${parsed.urlpath}`;
+        return `${parsed.protocol}://${parsed.location}/${parsed.urlpath}`;
     }
 
     static isAbsolute(url) {

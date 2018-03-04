@@ -61,15 +61,15 @@ export class NALUAsm {
 
         if (is_start) {
             this.fragmented_nalu = new NALU(payload_type, header.nri, rawData.subarray(nal_start_idx), dts, pts);
-        } else {
-            if (this.fragmented_nalu && this.fragmented_nalu.ntype === payload_type) {
+        }
+        if (this.fragmented_nalu && this.fragmented_nalu.ntype === payload_type) {
+            if (!is_start) {
                 this.fragmented_nalu.appendData(rawData.subarray(nal_start_idx));
-
-                if (is_end) {
-                    ret = this.fragmented_nalu;
-                    this.fragmented_nalu = null;
-                    return ret;
-                }
+            }
+            if (is_end) {
+                ret = this.fragmented_nalu;
+                this.fragmented_nalu = null;
+                return ret;
             }
         }
         return null;
