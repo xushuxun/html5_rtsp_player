@@ -6,6 +6,7 @@ export class H264Parser {
     constructor(remuxer) {
         this.remuxer = remuxer;
         this.track = remuxer.mp4track;
+        this.firstFound = false;
     }
 
     msToScaled(timestamp) {
@@ -44,7 +45,15 @@ export class H264Parser {
         switch (unit.type()) {
             case NALU.NDR:
             case NALU.IDR:
-                push = true;
+                unit.sliceType = H264Parser.parceSliceHeader(unit.data);
+                if (unit.isKeyframe() && !this.firstFound)  {
+                    this.firstFound = true;
+                }
+                if (this.firstFound) {
+                    push = true;
+                } else {
+                    push = false;
+                }
                 break;
             case NALU.PPS:
                 push = false;
@@ -96,6 +105,16 @@ export class H264Parser {
             push=true;
         }
         return push;
+    }
+
+    static parceSliceHeader(data) {
+        let decoder = new ExpGolomb(data);
+        let first_mb = decoder.readUEG();
+        let slice_type = decoder.readUEG();
+        let ppsid = decoder.readUEG();
+        let frame_num = decoder.readUByte();
+        // console.log(`first_mb: ${first_mb}, slice_type: ${slice_type}, ppsid: ${ppsid}, frame_num: ${frame_num}`);
+        return slice_type;
     }
 
     /**

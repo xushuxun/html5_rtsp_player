@@ -72,6 +72,11 @@ export default class RTSPClient extends BaseClient {
         }
     }
 
+    stop() {
+        super.stop();
+        return this.clientSM.stop();
+    }
+
     onData(data) {
         this.clientSM.onData(data);
     }
@@ -212,7 +217,11 @@ export class RTSPClientSM extends StateMachine {
             return this.transitionTo(RTSPClientSM.STATE_OPTIONS);
         } else {
             // TODO: seekable
-            return Promise.resolve();
+            let promises = [];
+            for (let session in this.sessions) {
+                promises.push(this.sessions[session].sendPlay());
+            }
+            return Promise.all(promises);
         }
     }
 
@@ -233,6 +242,11 @@ export class RTSPClientSM extends StateMachine {
 
     stop() {
         this.shouldReconnect = false;
+        let promises = [];
+        for (let session in this.sessions) {
+            promises.push(this.sessions[session].sendPause());
+        }
+        return Promise.all(promises);
         // this.mse = null;
     }
 

@@ -42,7 +42,7 @@ export class NALU {
         this.nri = nri;
         this.dts = dts;
         this.pts = pts ? pts : this.dts;
-
+        this.sliceType = null;
     }
 
     appendData(idata) {
@@ -62,7 +62,7 @@ export class NALU {
     }
 
     isKeyframe() {
-        return this.ntype == NALU.IDR;
+        return this.ntype === NALU.IDR || this.sliceType === 7;
     }
 
     getSize() {
