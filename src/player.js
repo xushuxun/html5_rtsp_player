@@ -80,7 +80,7 @@ export class WSPlayer {
                 Log.warn(`Client stream type ${client.streamType()} is incompatible with transport types [${transport.streamTypes().join(', ')}]. Skip`)
             }
         }
-        
+
         this.type = StreamType.RTSP;
         this.url = null;
         if (opts.url && opts.type) {
@@ -111,6 +111,14 @@ export class WSPlayer {
 
         this.player.addEventListener('pause', ()=>{
             this.client.stop();
+        }, false);
+
+        this.player.addEventListener('abort', () => {
+            // disconnect the transport when the player is closed
+            this.client.stop();
+            this.transport.disconnect().then(() => {
+                this.client.destroy();
+            });
         }, false);
     }
 
