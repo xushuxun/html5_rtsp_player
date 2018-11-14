@@ -32,7 +32,7 @@ export default class RTSPClient extends BaseClient {
         };
         this.sampleQueues={};
     }
-
+    
     static streamType() {
         return 'rtsp';
     }
@@ -559,6 +559,8 @@ export class RTSPClientSM extends StateMachine {
                     // } else {
                     //     this.parent.sampleQueues[rtp.type].push([pay]);
                     // }
+                } else {
+                    this.parent.sampleQueues[rtp.type].push(pay);
                 }
             }
         }

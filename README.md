@@ -76,7 +76,23 @@ let player = new streamedian.WSPlayer(mediaElement, {
                // constructor: WebsocketTransport,
                options: {
                    // address of websocket proxy described below. ws${location.protocol=='https:'?'s':''}://${location.host}/ws/ by default
-                   socket: "ws://websocket_proxy_address/ws"
+                   socket: "ws://websocket_proxy_address/ws",
+                   // function called player exceptions
+                   errorHandler (e) {
+                       alert(`Failed to start player: ${e.message}`);
+                   },
+                   // function to get credentials for protected streams
+                   queryCredentials() {
+                       return new Promise((resolve, reject)=>{
+                           let c = prompt('input credentials in format user:password');
+                           if (c) {
+                               this.setCredentials.apply(this, c.split(':'));
+                               resolve();
+                           } else {
+                               reject();
+                           }
+                       });
+                   }
                }
            }
         },
@@ -128,6 +144,15 @@ Include compiled script into your HTML:
 ```
 <script src="streamedian.js"></script>
 ```
+
+### RTSP Authentication
+
+Streamedian player support both basic and digest authentication. Authentication type is detected automatically
+when you connect to the stream.
+You can directly specify user/password in rtsp url in form rtsp://username@password:stream.url/resource/
+or pass _queryCredentials()_ function to _streamedian.WSPlayer_. This function in order
+should return promise that call _this.setCredentials(user, password)_.
+
 
 ### Server side
 
@@ -223,6 +248,12 @@ RTSP player establish connection with proxy with following protocol:
     ```
 
 4. RTP channel should send interleaved data with 4 byte header ($\<channel\>\<size\>). Separate RTP is not supported at this moment
+
+
+### Load balancing
+
+RTSP proxy does not support load balancing itself but can be easily integrated with such load balancers like nginx.
+You can start multiple instances of proxy on different sockets and configure nginx upstreams.
 
 ![](http://www.specforge.com/static/images/demo/ws_rtsp_proxy.png)
 

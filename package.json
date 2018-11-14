@@ -3,8 +3,9 @@
   "version": "0.3.13",
   "description": "HTML5 MSE RTSP player over websockets",
   "license": "Apache2",
+  "private": true,
   "author": "Streamedian <streamedian.player@gmail.com> (http://streamedian.com/)",
-  "homepage": "http://streamedian.com/",
+  "homepage": "https://streamedian.com/",
   "keywords": [
     "html5",
     "rtsp",
@@ -12,6 +13,21 @@
     "streaming"
   ],
   "contributors": [
+    {
+      "name": "Victor Grenke",
+      "email": "viktor.grenke@gmail.com",
+      "url": "https://streamedian.com/"
+    },
+    {
+      "name": "Igor Shakirov",
+      "email": "igor.shakirov@specforge.com",
+      "url": "https://specforge.com/"
+    },
+    {
+      "name": "Ruslan Shamunov",
+      "email": "ruslan.shamunov@specforge.com",
+      "url": "https://specforge.com/"
+    },
     {
       "name": "Alexey Gornostaev",
       "email": "kreopt@gmail.com",

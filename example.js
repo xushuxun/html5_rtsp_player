@@ -6,12 +6,14 @@ import {isSafari} from "streamedian/core/util/browser.js";
 
 setDefaultLogLevel(LogLevel.Debug);
 getTagged("transport:ws").setLevel(LogLevel.Error);
-getTagged("client:rtsp").setLevel(LogLevel.Error);
+getTagged("client:rtsp").setLevel(LogLevel.Debug);
+getTagged("mse").setLevel(LogLevel.Debug);
 
 let wsTransport = {
     constructor: WebsocketTransport,
     options: {
         socket: "wss://specforge.com/ws/"
+        // socket: "ws://localhost:8080/ws/"
     }
 };
 
@@ -39,3 +41,8 @@ window.StreamedianPlayer = new streamedian.WSPlayer('test_video', {
         });
     }
 });
+
+var setUrl = document.getElementById('set_new_url');
+setUrl.onclick = function() {
+    StreamedianPlayer.setSource(document.getElementById('stream_url').value, streamedian.StreamType.RTSP);
+};

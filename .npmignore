@@ -1,3 +1,7 @@
 dist
 node_modules
-example/streamedian.js
+examples/test.bundle.js
+src/client/hls
+src/core/parsers/pes.js
+src/core/parsers/ts.js
+webpack.config.js

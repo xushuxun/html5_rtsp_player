@@ -57,7 +57,7 @@ export class AACRemuxer extends BaseRemuxer {
             this.mp4track.len += aac.getSize();
         }
     }
-    
+
     getPayload() {
         if (!this.readyToDecode || !this.samples.length) return null;
         this.samples.sort(function(a, b) {
