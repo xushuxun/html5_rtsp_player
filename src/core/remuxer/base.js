@@ -92,6 +92,16 @@ export class BaseRemuxer {
         return (a.dts-b.dts);
     }
 
+    static groupByDts(gop) {
+        const groupBy = (xs, key) => {
+            return xs.reduce((rv, x) => {
+                (rv[x[key]] = rv[x[key]] || []).push(x);
+                return rv;
+            }, {});
+        };
+        return groupBy(gop, 'dts');
+    }
+
     getPayloadBase(sampleFunction, setupSample) {
         if (!this.readyToDecode || !this.initialized || !this.samples.length) return null;
         this.samples.sort(BaseRemuxer.dtsSortFunc);
