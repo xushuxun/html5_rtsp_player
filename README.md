@@ -29,7 +29,9 @@ Not supported in iOS Safari and Internet Explorer
 
 ## Install
 
+```
 npm install git://github.com/Streamedian/html5_rtsp_player.git
+```
 
 ## Usage
 
