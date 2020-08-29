@@ -84,3 +84,5 @@ crashlytics.properties
 crashlytics-build.properties
 
 dist/
+example/streamedian.min.js
+example/streamedian.min.js.map
